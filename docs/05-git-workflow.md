@@ -63,6 +63,17 @@ gh api repos/CaioGitDev/SFC-EventsPlanner \
 
 Nota: `required_approving_review_count` está a 0 porque és o único developer — o GitHub não permite aprovares o teu próprio PR. O gate humano é a tua própria review do diff no PR antes do merge. Se entrar mais alguém na equipa, subir para 1.
 
+### Dependência de plano (rulesets e secret scanning)
+
+Os passos 2 e 3 acima dependem do plano do repositório:
+
+- **Repositório privado:** rulesets (passo 2) e secret scanning + push protection (passo 3) exigem **GitHub Pro** (ou superior). No plano gratuito devolvem `403 Upgrade to GitHub Pro` e `422 Secret scanning is not available`, respetivamente.
+- **Repositório público:** ambos são **gratuitos**.
+
+O `SFC-EventsPlanner` está **público** para ter estes gates sem custo. Isto é aceitável porque o repositório contém apenas **código, documentação e configuração** — nunca dados de eventos, atletas, documentos médicos ou dados de menores (esses vivem exclusivamente na base de dados; ver ADR-004). Se algum dia for necessário privado com estes gates impostos, a via é subscrever GitHub Pro.
+
+Independentemente do plano, o gate de segredos do **CI (gitleaks, job `secrets-scan`)** corre sempre em cada PR — o secret scanning nativo do GitHub é uma camada adicional, não o único mecanismo.
+
 ## Fluxo por funcionalidade
 
 ```bash
