@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for .NET solution
+        id: check
+        run: |
+          if ls src/*.sln *.sln 2>/dev/null | grep -q .; then echo "exists=true" >> "$GITHUB_OUTPUT"; else echo "exists=false" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/setup-dotnet@v4
+        if: steps.check.outputs.exists == 'true'
+        with:
+          dotnet-version: '9.0.x'
+      - name: Build & test
+        if: steps.check.outputs.exists == 'true'
+        run: dotnet test --nologo
+      - name: No solution yet (docs-only phase)
+        if: steps.check.outputs.exists == 'false'
+        run: echo "Sem solução .NET ainda — gate passa em fase de documentação."
+
+  portal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for portal
+        id: check
+        run: |
+          if [ -f portal/package.json ]; then echo "exists=true" >> "$GITHUB_OUTPUT"; else echo "exists=false" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.exists == 'true'
+        with:
+          node-version: '22'
+      - name: Build portal
+        if: steps.check.outputs.exists == 'true'
+        working-directory: portal
+        run: |
+          npm ci
+          npm run lint --if-present
+          npm run build
+      - name: No portal yet
+        if: steps.check.outputs.exists == 'false'
+        run: echo "Sem portal ainda."
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks (deteção de segredos)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
