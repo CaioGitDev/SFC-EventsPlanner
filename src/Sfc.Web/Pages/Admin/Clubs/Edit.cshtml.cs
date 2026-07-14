@@ -41,7 +41,10 @@ public class EditModel(ClubService clubService) : PageModel
             ModelState.AddModelError("Logo", "A imagem não pode exceder 10 MB.");
 
         if (!ModelState.IsValid)
+        {
+            CurrentLogoUrl = (await clubService.GetAsync(id, ct))?.LogoUrl;
             return Page();
+        }
 
         try
         {
@@ -53,6 +56,7 @@ public class EditModel(ClubService clubService) : PageModel
         catch (InvalidImageException)
         {
             ModelState.AddModelError("Logo", "O ficheiro não é uma imagem válida.");
+            CurrentLogoUrl = (await clubService.GetAsync(id, ct))?.LogoUrl;
             return Page();
         }
 
