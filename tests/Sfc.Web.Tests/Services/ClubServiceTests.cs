@@ -118,6 +118,21 @@ public class ClubServiceTests(SfcWebApplicationFactory factory)
         Assert.Null(await service.GetAsync(club.Id));
     }
 
+    [Fact]
+    public async Task DeleteAsync_WithLogo_RemovesStoredImage()
+    {
+        using var scope = factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ClubService>();
+        using var png = await CreatePngAsync(100, 100);
+        var club = await service.CreateAsync(Input("Delete With Logo"), png);
+        Assert.True(factory.ImageStorage.Saved.ContainsKey($"clubs/{club.Id}.webp"));
+
+        var result = await service.DeleteAsync(club.Id);
+
+        Assert.Equal(ClubDeleteResult.Deleted, result);
+        Assert.False(factory.ImageStorage.Saved.ContainsKey($"clubs/{club.Id}.webp"));
+    }
+
     private static async Task<MemoryStream> CreatePngAsync(int width, int height)
     {
         using var image = new Image<Rgba32>(width, height);
