@@ -20,11 +20,7 @@ public static class ImageProcessor
         {
             image = await Image.LoadAsync(input, ct);
         }
-        catch (UnknownImageFormatException ex)
-        {
-            throw new InvalidImageException("File is not a valid image.", ex);
-        }
-        catch (InvalidImageContentException ex)
+        catch (ImageFormatException ex)
         {
             throw new InvalidImageException("File is not a valid image.", ex);
         }
