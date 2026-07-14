@@ -1,5 +1,3 @@
-using System.Text.Encodings.Web;
-using System.Text.Unicode;
 using Amazon.S3;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -9,11 +7,6 @@ using Sfc.Infrastructure.Storage;
 using Sfc.Web.Startup;
 
 var builder = WebApplication.CreateBuilder(args);
-
-// Allow Latin-1 (accented pt-PT characters) to render unescaped in Razor views
-// instead of as HTML entities (the default HtmlEncoder only allows Basic Latin).
-builder.Services.AddSingleton(
-    HtmlEncoder.Create(UnicodeRanges.BasicLatin, UnicodeRanges.Latin1Supplement));
 
 builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizeFolder("/Admin"));

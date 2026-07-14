@@ -45,7 +45,7 @@ public class AuthenticationTests(SfcWebApplicationFactory factory)
             new KeyValuePair<string, string>("__RequestVerificationToken", token),
         ]));
 
-        var html = await response.Content.ReadAsStringAsync();
+        var html = System.Net.WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
         Assert.Contains("Credenciais inválidas", html);
     }
 }
