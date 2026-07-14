@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Sfc.Infrastructure.Persistence;
 using Sfc.Infrastructure.Storage;
+using Sfc.Web.Services;
 using Sfc.Web.Startup;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -42,6 +43,8 @@ builder.Services.AddSingleton<IAmazonS3>(sp =>
     return new AmazonS3Client(storage.AccessKey, storage.SecretKey, config);
 });
 builder.Services.AddSingleton<IImageStorage, S3ImageStorage>();
+
+builder.Services.AddScoped<ClubService>();
 
 var app = builder.Build();
 
