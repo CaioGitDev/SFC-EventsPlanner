@@ -1,0 +1,47 @@
+@* src/Sfc.Web/Pages/Admin/Clubs/Create.cshtml *@
+@page
+@model Sfc.Web.Pages.Admin.Clubs.CreateModel
+@{
+    ViewData["Title"] = "Novo clube";
+}
+<h1 class="h3 mb-4">Novo clube</h1>
+<form method="post" enctype="multipart/form-data" class="col-12 col-md-8 col-lg-6">
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+    <div class="mb-3">
+        <label asp-for="Form.Name" class="form-label">Nome *</label>
+        <input asp-for="Form.Name" class="form-control" />
+        <span asp-validation-for="Form.Name" class="text-danger"></span>
+    </div>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label asp-for="Form.City" class="form-label">Cidade</label>
+            <input asp-for="Form.City" class="form-control" />
+        </div>
+        <div class="col-md-6 mb-3">
+            <label asp-for="Form.Country" class="form-label">País</label>
+            <input asp-for="Form.Country" class="form-control" />
+        </div>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Form.ContactEmail" class="form-label">Email de contacto</label>
+        <input asp-for="Form.ContactEmail" class="form-control" />
+        <span asp-validation-for="Form.ContactEmail" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Form.ContactPhone" class="form-label">Telefone de contacto</label>
+        <input asp-for="Form.ContactPhone" class="form-control" />
+    </div>
+    <div class="mb-3">
+        <label asp-for="Form.CoachesText" class="form-label">Treinadores</label>
+        <textarea asp-for="Form.CoachesText" class="form-control" rows="3"
+                  placeholder="Um por linha: Nome; contacto (opcional)"></textarea>
+        <div class="form-text">Um treinador por linha, no formato "Nome; contacto". O contacto é opcional.</div>
+    </div>
+    <div class="mb-4">
+        <label asp-for="Logo" class="form-label">Logo</label>
+        <input asp-for="Logo" type="file" accept="image/*" class="form-control" />
+        <span asp-validation-for="Logo" class="text-danger"></span>
+    </div>
+    <button type="submit" class="btn btn-primary">Guardar</button>
+    <a asp-page="Index" class="btn btn-link">Cancelar</a>
+</form>

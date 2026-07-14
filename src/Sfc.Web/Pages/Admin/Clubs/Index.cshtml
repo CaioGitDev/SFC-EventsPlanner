@@ -1,0 +1,59 @@
+@* src/Sfc.Web/Pages/Admin/Clubs/Index.cshtml *@
+@page
+@model Sfc.Web.Pages.Admin.Clubs.IndexModel
+@{
+    ViewData["Title"] = "Clubes";
+}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Clubes</h1>
+    <a asp-page="Create" class="btn btn-primary">Novo clube</a>
+</div>
+<form method="get" class="row g-2 mb-3">
+    <div class="col-12 col-md-6">
+        <input asp-for="Search" class="form-control" placeholder="Pesquisar por nome…" />
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-outline-secondary">Pesquisar</button>
+    </div>
+</form>
+@if (Model.Clubs.Count == 0)
+{
+    <p class="text-muted">Sem clubes registados.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Nome</th>
+                    <th class="d-none d-md-table-cell">Cidade</th>
+                    <th class="d-none d-md-table-cell">Treinadores</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var club in Model.Clubs)
+            {
+                <tr>
+                    <td style="width:56px">
+                        @if (club.LogoUrl is not null)
+                        {
+                            <img src="@club.LogoUrl" alt="Logo de @club.Name" width="40" height="40"
+                                 class="rounded object-fit-cover" />
+                        }
+                    </td>
+                    <td>@club.Name</td>
+                    <td class="d-none d-md-table-cell">@club.City</td>
+                    <td class="d-none d-md-table-cell">@string.Join(", ", club.Coaches.Select(c => c.Name))</td>
+                    <td class="text-end">
+                        <a asp-page="Edit" asp-route-id="@club.Id" class="btn btn-sm btn-outline-secondary">Editar</a>
+                        <a asp-page="Delete" asp-route-id="@club.Id" class="btn btn-sm btn-outline-danger">Apagar</a>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
