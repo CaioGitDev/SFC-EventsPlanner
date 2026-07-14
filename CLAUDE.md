@@ -28,7 +28,7 @@ Primeiro cliente: SFC. Visão a longo prazo: SaaS multi-tenant para associaçõe
 
 ## Stack (resumo — detalhe em docs/03-arquitetura.md)
 
-- Backend: ASP.NET Core (.NET 9), monólito modular, EF Core, PostgreSQL
+- Backend: ASP.NET Core (.NET 10 LTS — ver ADR-006), monólito modular, EF Core, PostgreSQL
 - Frontend público: Next.js (App Router) + TypeScript + Tailwind + shadcn/ui
 - Backoffice: Razor Pages/MVC dentro do monólito (simples primeiro)
 - Sem Redis, SignalR, Hangfire, CQRS ou MediatR até haver problema concreto que os justifique

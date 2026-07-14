@@ -18,7 +18,7 @@ portal/                  # Portal público Next.js (App Router)
 
 ## Desenvolvimento local
 
-Pré-requisitos: .NET SDK 9+ (com SDK 10 os projetos `net9.0` correm no runtime 10 via `RollForward`), Node 22+, Docker.
+Pré-requisitos: .NET SDK 10, Node 22+, Docker.
 
 ```bash
 # 1. Infraestrutura local (PostgreSQL + MinIO) — --wait espera pelo healthcheck
