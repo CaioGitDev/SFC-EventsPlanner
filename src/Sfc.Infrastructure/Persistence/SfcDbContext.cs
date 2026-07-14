@@ -2,6 +2,8 @@ using System.Linq.Expressions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Sfc.Domain.Athletes;
+using Sfc.Domain.Clubs;
 using Sfc.Domain.Common;
 using Sfc.Domain.Organizations;
 
@@ -17,6 +19,8 @@ public class SfcDbContext(DbContextOptions<SfcDbContext> options)
     public Guid CurrentOrganizationId { get; set; } = SeedData.SfcOrganizationId;
 
     public DbSet<Organization> Organizations => Set<Organization>();
+    public DbSet<Club> Clubs => Set<Club>();
+    public DbSet<Athlete> Athletes => Set<Athlete>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -35,6 +39,38 @@ public class SfcDbContext(DbContextOptions<SfcDbContext> options)
                 CreatedAt = SeedData.SeedTimestamp,
                 UpdatedAt = SeedData.SeedTimestamp,
             });
+        });
+
+        builder.Entity<Club>(entity =>
+        {
+            entity.Property(c => c.Name).HasMaxLength(200).IsRequired();
+            entity.Property(c => c.LogoUrl).HasMaxLength(500);
+            entity.Property(c => c.City).HasMaxLength(100);
+            entity.Property(c => c.Country).HasMaxLength(100);
+            entity.Property(c => c.ContactEmail).HasMaxLength(200);
+            entity.Property(c => c.ContactPhone).HasMaxLength(50);
+            entity.OwnsMany(c => c.Coaches, coaches => coaches.ToJson());
+            entity.HasIndex(c => c.OrganizationId);
+        });
+
+        builder.Entity<Athlete>(entity =>
+        {
+            entity.Property(a => a.FirstName).HasMaxLength(100).IsRequired();
+            entity.Property(a => a.LastName).HasMaxLength(100).IsRequired();
+            entity.Property(a => a.Nickname).HasMaxLength(100);
+            entity.Property(a => a.Slug).HasMaxLength(200).IsRequired();
+            entity.Property(a => a.PhotoUrl).HasMaxLength(500);
+            entity.Property(a => a.Nationality).HasMaxLength(100).IsRequired();
+            entity.Property(a => a.CoachName).HasMaxLength(200);
+            entity.Property(a => a.WeightClass).HasMaxLength(50);
+            entity.Property(a => a.WeightKg).HasPrecision(5, 2);
+            entity.Property(a => a.Discipline).HasConversion<string>().HasMaxLength(20);
+            entity.Property(a => a.Status).HasConversion<string>().HasMaxLength(20);
+            entity.HasIndex(a => new { a.OrganizationId, a.Slug }).IsUnique();
+            entity.HasOne(a => a.Club)
+                .WithMany()
+                .HasForeignKey(a => a.ClubId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         ApplyOrganizationQueryFilters(builder);
