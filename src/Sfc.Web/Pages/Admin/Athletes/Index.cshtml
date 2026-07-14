@@ -1,5 +1,110 @@
+@* src/Sfc.Web/Pages/Admin/Athletes/Index.cshtml — REPLACES the Task 7 placeholder *@
 @page
+@using Sfc.Domain.Athletes
+@using Sfc.Web.Services
+@model Sfc.Web.Pages.Admin.Athletes.IndexModel
 @{
     ViewData["Title"] = "Atletas";
+    var totalPages = (int)Math.Ceiling((double)Model.Result.TotalCount / Model.Result.PageSize);
 }
-<h1 class="h3">Atletas</h1>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Atletas</h1>
+    <a asp-page="Create" class="btn btn-primary">Novo atleta</a>
+</div>
+<form method="get" class="row g-2 mb-3">
+    <div class="col-12 col-md-4">
+        <input asp-for="Search" class="form-control" placeholder="Pesquisar por nome ou alcunha…" />
+    </div>
+    <div class="col-6 col-md-3">
+        <select asp-for="ClubId" asp-items="Model.ClubOptions" class="form-select">
+            <option value="">Todos os clubes</option>
+        </select>
+    </div>
+    <div class="col-6 col-md-3">
+        <select asp-for="Discipline" class="form-select">
+            <option value="">Todas as disciplinas</option>
+            @foreach (var d in Enum.GetValues<Discipline>())
+            {
+                <option value="@d">@d.ToDisplay()</option>
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-outline-secondary">Filtrar</button>
+    </div>
+</form>
+@if (Model.Result.Items.Count == 0)
+{
+    <p class="text-muted">Sem atletas para os filtros escolhidos.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Nome</th>
+                    <th class="d-none d-md-table-cell">Clube</th>
+                    <th class="d-none d-md-table-cell">Disciplina</th>
+                    <th>Cartel</th>
+                    <th class="d-none d-md-table-cell">Estado</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var athlete in Model.Result.Items)
+            {
+                <tr>
+                    <td style="width:56px">
+                        @if (athlete.PhotoUrl is not null)
+                        {
+                            <img src="@athlete.PhotoUrl" alt="Foto de @athlete.FullName"
+                                 width="40" height="40" class="rounded-circle object-fit-cover" />
+                        }
+                    </td>
+                    <td>
+                        @athlete.FullName
+                        @if (athlete.Nickname is not null)
+                        {
+                            <span class="text-muted">"@athlete.Nickname"</span>
+                        }
+                    </td>
+                    <td class="d-none d-md-table-cell">@athlete.ClubName</td>
+                    <td class="d-none d-md-table-cell">@athlete.Discipline.ToDisplay()</td>
+                    <td>@athlete.Record</td>
+                    <td class="d-none d-md-table-cell">
+                        @if (athlete.IsActive)
+                        {
+                            <span class="badge text-bg-success">Ativo</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-secondary">Inativo</span>
+                        }
+                    </td>
+                    <td class="text-end">
+                        <a asp-page="Edit" asp-route-id="@athlete.Id" class="btn btn-sm btn-outline-secondary">Editar</a>
+                        <a asp-page="Delete" asp-route-id="@athlete.Id" class="btn btn-sm btn-outline-danger">Apagar</a>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+    @if (totalPages > 1)
+    {
+        <nav aria-label="Paginação">
+            <ul class="pagination">
+            @for (var i = 1; i <= totalPages; i++)
+            {
+                <li class="page-item @(i == Model.Result.Page ? "active" : "")">
+                    <a class="page-link" asp-page="Index" asp-route-p="@i"
+                       asp-route-search="@Model.Search" asp-route-clubId="@Model.ClubId"
+                       asp-route-discipline="@Model.Discipline">@i</a>
+                </li>
+            }
+            </ul>
+        </nav>
+    }
+}
