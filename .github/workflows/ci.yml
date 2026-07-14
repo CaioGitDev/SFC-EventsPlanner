@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         if: steps.check.outputs.exists == 'true'
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: '10.0.x'
       - name: Build & test
         if: steps.check.outputs.exists == 'true'
         run: dotnet test --nologo
