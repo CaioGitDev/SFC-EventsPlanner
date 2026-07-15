@@ -92,7 +92,7 @@ public class AthleteTests
         var athlete = CreateAthlete(baselineWins: 10, baselineLosses: 2, baselineDraws: 0, baselineKos: 5);
 
         athlete.Update("Johnny", "Fish", "The Eel", new DateOnly(1999, 1, 1), "Brasil",
-            Discipline.K1, AthleteStatus.Amateur, null, "Coach Zé", "-72kg", 71.5m, 180, true, false);
+            Discipline.K1, AthleteStatus.Amateur, null, "Coach Zé", "-72kg", 71.5m, 180, true, false, null);
 
         Assert.Equal(10, athlete.Wins);
         Assert.Equal(2, athlete.Losses);
@@ -131,7 +131,39 @@ public class AthleteTests
         Assert.Throws<ArgumentException>(() =>
             athlete.Update("João", "Peixão", null, new DateOnly(2000, 5, 20), "Portugal",
                 Discipline.MuayThai, AthleteStatus.Professional, null, null, null,
-                (decimal)weight, null, false, true));
+                (decimal)weight, null, false, true, null));
+    }
+
+    [Fact]
+    public void Constructor_WithNotes_TrimsValue()
+    {
+        var athlete = new Athlete(OrgId, "João", "Peixão", new DateOnly(2000, 5, 20), "Portugal",
+            Discipline.MuayThai, AthleteStatus.Professional, "joao-peixao",
+            publicProfileConsent: false, notes: "  consentimento recebido a 12/07/2026  ");
+
+        Assert.Equal("consentimento recebido a 12/07/2026", athlete.Notes);
+    }
+
+    [Fact]
+    public void Constructor_WithBlankNotes_NormalizesToNull()
+    {
+        var athlete = new Athlete(OrgId, "João", "Peixão", new DateOnly(2000, 5, 20), "Portugal",
+            Discipline.MuayThai, AthleteStatus.Professional, "joao-peixao",
+            publicProfileConsent: false, notes: "   ");
+
+        Assert.Null(athlete.Notes);
+    }
+
+    [Fact]
+    public void Update_ChangesNotes()
+    {
+        var athlete = CreateAthlete();
+
+        athlete.Update("João", "Peixão", null, new DateOnly(2000, 5, 20), "Portugal",
+            Discipline.MuayThai, AthleteStatus.Professional, null, null, null, null, null,
+            false, true, "consentimento do encarregado de educação recebido");
+
+        Assert.Equal("consentimento do encarregado de educação recebido", athlete.Notes);
     }
 
     [Fact]

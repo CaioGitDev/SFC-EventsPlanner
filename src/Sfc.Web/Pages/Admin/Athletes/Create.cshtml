@@ -117,7 +117,7 @@
         </div>
     </div>
 
-    <h2 class="h5 mt-2">Publicação</h2>
+    <h2 class="h5 mt-2">Publicação e notas</h2>
     <div class="form-check mb-3">
         <input asp-for="Form.PublicProfileConsent" class="form-check-input" />
         <label asp-for="Form.PublicProfileConsent" class="form-check-label">
@@ -127,6 +127,12 @@
             Sem consentimento, o atleta aparece no portal apenas com o nome no fight card.
             Menores exigem consentimento do encarregado de educação.
         </div>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Form.Notes" class="form-label">Notas internas</label>
+        <textarea asp-for="Form.Notes" class="form-control" rows="2"
+                  placeholder="ex.: consentimento do encarregado de educação recebido a 12/07/2026"></textarea>
+        <div class="form-text">Nunca aparecem no portal público. Usar para registar o consentimento do encarregado de educação de atletas menores (ADR-004).</div>
     </div>
     <div class="mb-3">
         <label asp-for="Form.Slug" class="form-label">Slug (URL pública)</label>

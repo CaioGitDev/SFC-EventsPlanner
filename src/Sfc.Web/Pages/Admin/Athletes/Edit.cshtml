@@ -108,6 +108,12 @@
         <label asp-for="IsActive" class="form-check-label">Ativo</label>
     </div>
     <div class="mb-3">
+        <label asp-for="Form.Notes" class="form-label">Notas internas</label>
+        <textarea asp-for="Form.Notes" class="form-control" rows="2"
+                  placeholder="ex.: consentimento do encarregado de educação recebido a 12/07/2026"></textarea>
+        <div class="form-text">Nunca aparecem no portal público. Usar para registar o consentimento do encarregado de educação de atletas menores (ADR-004).</div>
+    </div>
+    <div class="mb-3">
         <label asp-for="Form.Slug" class="form-label">Slug (URL pública)</label>
         <input asp-for="Form.Slug" class="form-control" />
         <span asp-validation-for="Form.Slug" class="text-danger"></span>

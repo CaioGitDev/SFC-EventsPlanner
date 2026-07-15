@@ -28,6 +28,12 @@ public class Athlete : IOrganizationScoped
     public bool IsActive { get; private set; }
     public bool PublicProfileConsent { get; private set; }
 
+    /// <summary>
+    /// Internal backoffice-only notes (e.g. guardian consent records for minors,
+    /// ADR-004). NEVER exposed on the public portal.
+    /// </summary>
+    public string? Notes { get; private set; }
+
     // Historical record from before the platform. Set at creation, never
     // mutated (domain rule 3) — results from platform fights are aggregated
     // on top of these (prompt 03).
@@ -69,7 +75,7 @@ public class Athlete : IOrganizationScoped
         string nationality, Discipline discipline, AthleteStatus status, string slug,
         string? nickname = null, Guid? clubId = null, string? coachName = null,
         string? weightClass = null, decimal? weightKg = null, int? heightCm = null,
-        bool publicProfileConsent = false,
+        bool publicProfileConsent = false, string? notes = null,
         int baselineWins = 0, int baselineLosses = 0, int baselineDraws = 0, int baselineKos = 0)
     {
         if (organizationId == Guid.Empty)
@@ -92,7 +98,7 @@ public class Athlete : IOrganizationScoped
         Slug = null!;
         Nationality = null!;
         SetProfile(firstName, lastName, nickname, dateOfBirth, nationality, discipline, status,
-            clubId, coachName, weightClass, weightKg, heightCm, publicProfileConsent);
+            clubId, coachName, weightClass, weightKg, heightCm, publicProfileConsent, notes);
         UpdateSlug(slug);
         BaselineWins = baselineWins;
         BaselineLosses = baselineLosses;
@@ -106,10 +112,10 @@ public class Athlete : IOrganizationScoped
     public void Update(string firstName, string lastName, string? nickname, DateOnly dateOfBirth,
         string nationality, Discipline discipline, AthleteStatus status, Guid? clubId,
         string? coachName, string? weightClass, decimal? weightKg, int? heightCm,
-        bool publicProfileConsent, bool isActive)
+        bool publicProfileConsent, bool isActive, string? notes)
     {
         SetProfile(firstName, lastName, nickname, dateOfBirth, nationality, discipline, status,
-            clubId, coachName, weightClass, weightKg, heightCm, publicProfileConsent);
+            clubId, coachName, weightClass, weightKg, heightCm, publicProfileConsent, notes);
         IsActive = isActive;
         UpdatedAt = DateTime.UtcNow;
     }
@@ -136,7 +142,7 @@ public class Athlete : IOrganizationScoped
     private void SetProfile(string firstName, string lastName, string? nickname,
         DateOnly dateOfBirth, string nationality, Discipline discipline, AthleteStatus status,
         Guid? clubId, string? coachName, string? weightClass, decimal? weightKg, int? heightCm,
-        bool publicProfileConsent)
+        bool publicProfileConsent, string? notes)
     {
         if (string.IsNullOrWhiteSpace(firstName))
             throw new ArgumentException("First name is required.", nameof(firstName));
@@ -164,6 +170,7 @@ public class Athlete : IOrganizationScoped
         WeightKg = weightKg;
         HeightCm = heightCm;
         PublicProfileConsent = publicProfileConsent;
+        Notes = NullIfBlank(notes);
     }
 
     private static string? NullIfBlank(string? value)

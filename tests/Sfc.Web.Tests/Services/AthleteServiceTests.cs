@@ -13,7 +13,7 @@ public class AthleteServiceTests(SfcWebApplicationFactory factory)
     private static AthleteInput Input(string firstName, string lastName,
         Guid? clubId = null, Discipline discipline = Discipline.MuayThai, string? slug = null)
         => new(firstName, lastName, null, new DateOnly(2000, 5, 20), "Portugal",
-            discipline, AthleteStatus.Professional, clubId, null, null, null, null, false, slug);
+            discipline, AthleteStatus.Professional, clubId, null, null, null, null, false, slug, null);
 
     [Fact]
     public async Task CreateAsync_GeneratesSlugFromName()

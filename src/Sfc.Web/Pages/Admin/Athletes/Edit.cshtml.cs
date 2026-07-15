@@ -43,6 +43,7 @@ public class EditModel(AthleteService athleteService, ClubService clubService) :
             HeightCm = athlete.HeightCm,
             PublicProfileConsent = athlete.PublicProfileConsent,
             Slug = athlete.Slug,
+            Notes = athlete.Notes,
         };
         IsActive = athlete.IsActive;
         CurrentPhotoUrl = athlete.PhotoUrl;

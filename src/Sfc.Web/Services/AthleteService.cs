@@ -10,7 +10,7 @@ namespace Sfc.Web.Services;
 public record AthleteInput(string FirstName, string LastName, string? Nickname,
     DateOnly DateOfBirth, string Nationality, Discipline Discipline, AthleteStatus Status,
     Guid? ClubId, string? CoachName, string? WeightClass, decimal? WeightKg, int? HeightCm,
-    bool PublicProfileConsent, string? Slug);
+    bool PublicProfileConsent, string? Slug, string? Notes);
 
 public record AthleteListItem(Guid Id, string FullName, string? Nickname, string? PhotoUrl,
     string? ClubName, Discipline Discipline, string Record, bool IsActive);
@@ -87,7 +87,7 @@ public class AthleteService(SfcDbContext db, IImageStorage imageStorage)
         var athlete = new Athlete(db.CurrentOrganizationId, input.FirstName, input.LastName,
             input.DateOfBirth, input.Nationality, input.Discipline, input.Status, slug,
             input.Nickname, input.ClubId, input.CoachName, input.WeightClass, input.WeightKg,
-            input.HeightCm, input.PublicProfileConsent,
+            input.HeightCm, input.PublicProfileConsent, input.Notes,
             baseline.Wins, baseline.Losses, baseline.Draws, baseline.Kos);
 
         if (photo is not null)
@@ -108,7 +108,7 @@ public class AthleteService(SfcDbContext db, IImageStorage imageStorage)
         athlete.Update(input.FirstName, input.LastName, input.Nickname, input.DateOfBirth,
             input.Nationality, input.Discipline, input.Status, input.ClubId, input.CoachName,
             input.WeightClass, input.WeightKg, input.HeightCm, input.PublicProfileConsent,
-            isActive);
+            isActive, input.Notes);
 
         var slug = await ResolveSlugAsync(input, excludeId: id, ct);
         if (slug != athlete.Slug)

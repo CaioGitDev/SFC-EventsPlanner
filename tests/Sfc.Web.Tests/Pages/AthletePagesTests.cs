@@ -16,7 +16,7 @@ public class AthletePagesTests(SfcWebApplicationFactory factory)
         var service = scope.ServiceProvider.GetRequiredService<AthleteService>();
         await service.CreateAsync(new AthleteInput("Página", "Listada", "A Lenda",
             new DateOnly(1995, 1, 1), "Portugal", Discipline.MuayThai, AthleteStatus.Professional,
-            null, null, null, null, null, false, null), (12, 2, 0, 6), null);
+            null, null, null, null, null, false, null, null), (12, 2, 0, 6), null);
 
         using var client = factory.CreateClient();
         await AuthTestHelper.LoginAsAdminAsync(client);

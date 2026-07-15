@@ -51,10 +51,13 @@ public class AthleteForm
         ErrorMessage = "Slug inválido: usar apenas minúsculas, números e hífens.")]
     public string? Slug { get; set; }
 
+    [StringLength(2000)]
+    public string? Notes { get; set; }
+
     public AthleteInput ToInput()
         => new(FirstName, LastName, Nickname, DateOfBirth!.Value, Nationality,
             Discipline!.Value, Status!.Value, ClubId, CoachName, WeightClass,
-            WeightKg, HeightCm, PublicProfileConsent, Slug);
+            WeightKg, HeightCm, PublicProfileConsent, Slug, Notes);
 }
 
 public class CreateModel(AthleteService athleteService, ClubService clubService) : PageModel

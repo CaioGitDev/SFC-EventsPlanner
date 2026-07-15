@@ -66,6 +66,7 @@ public class SfcDbContext(DbContextOptions<SfcDbContext> options)
             entity.Property(a => a.WeightKg).HasPrecision(5, 2);
             entity.Property(a => a.Discipline).HasConversion<string>().HasMaxLength(20);
             entity.Property(a => a.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(a => a.Notes).HasMaxLength(2000);
             entity.HasIndex(a => new { a.OrganizationId, a.Slug }).IsUnique();
             entity.HasOne(a => a.Club)
                 .WithMany()
