@@ -35,7 +35,7 @@ public class LoginModel(SignInManager<IdentityUser> signInManager) : PageModel
             return Page();
 
         var result = await signInManager.PasswordSignInAsync(
-            Input.Email, Input.Password, isPersistent: true, lockoutOnFailure: false);
+            Input.Email, Input.Password, isPersistent: true, lockoutOnFailure: true);
 
         if (result.Succeeded)
             return LocalRedirect(target);
