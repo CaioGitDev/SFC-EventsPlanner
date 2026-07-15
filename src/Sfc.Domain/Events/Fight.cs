@@ -98,6 +98,11 @@ public class Fight : IOrganizationScoped
             throw new InvalidOperationException("Only scheduled fights can have athletes replaced.");
         if (athleteId == Guid.Empty)
             throw new ArgumentException("Athlete is required.", nameof(athleteId));
+        if (corner == Corner.Red && athleteId == BlueCornerAthleteId)
+            throw new ArgumentException("An athlete cannot be in both corners.", nameof(athleteId));
+        if (corner == Corner.Blue && athleteId == RedCornerAthleteId)
+            throw new ArgumentException("An athlete cannot be in both corners.", nameof(athleteId));
+
         if (corner == Corner.Red)
         {
             RedCornerAthleteId = athleteId;

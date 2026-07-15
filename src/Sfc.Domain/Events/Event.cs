@@ -1,3 +1,4 @@
+using Sfc.Domain.Athletes;
 using Sfc.Domain.Common;
 
 namespace Sfc.Domain.Events;
@@ -127,6 +128,86 @@ public class Event : IOrganizationScoped
 
         PosterUrl = url.Trim();
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    public Fight AddFight(Guid redCornerAthleteId, Guid blueCornerAthleteId,
+        Discipline discipline, int rounds, int roundDurationMinutes,
+        string? weightClass, decimal? catchweightKg, bool isTitleFight, bool isAmateur)
+    {
+        EnsureAthleteNotInCard(redCornerAthleteId);
+        EnsureAthleteNotInCard(blueCornerAthleteId);
+
+        var fight = new Fight(OrganizationId, Id, _fights.Count + 1,
+            redCornerAthleteId, blueCornerAthleteId, discipline, rounds, roundDurationMinutes,
+            weightClass, catchweightKg, isTitleFight, isAmateur);
+        _fights.Add(fight);
+        RecalculateBilling();
+        UpdatedAt = DateTime.UtcNow;
+        return fight;
+    }
+
+    public bool RemoveFight(Guid fightId)
+    {
+        var fight = _fights.SingleOrDefault(f => f.Id == fightId);
+        if (fight is null)
+            return false;
+
+        _fights.Remove(fight);
+        foreach (var later in _fights.Where(f => f.Order > fight.Order))
+            later.SetOrder(later.Order - 1);
+
+        RecalculateBilling();
+        UpdatedAt = DateTime.UtcNow;
+        return true;
+    }
+
+    /// <summary>Up = earlier in the night (lower Order); Down = towards the main event.</summary>
+    public bool MoveFight(Guid fightId, MoveDirection direction)
+    {
+        var fight = FindFight(fightId);
+        var targetOrder = direction == MoveDirection.Up ? fight.Order - 1 : fight.Order + 1;
+        var neighbour = _fights.SingleOrDefault(f => f.Order == targetOrder);
+        if (neighbour is null)
+            return false;
+
+        neighbour.SetOrder(fight.Order);
+        fight.SetOrder(targetOrder);
+        RecalculateBilling();
+        UpdatedAt = DateTime.UtcNow;
+        return true;
+    }
+
+    public void ReplaceAthlete(Guid fightId, Corner corner, Guid newAthleteId)
+    {
+        var fight = FindFight(fightId);
+        EnsureAthleteNotInCard(newAthleteId);
+        fight.ReplaceCorner(corner, newAthleteId);
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public bool HasAthlete(Guid athleteId)
+        => _fights.Any(f => f.RedCornerAthleteId == athleteId || f.BlueCornerAthleteId == athleteId);
+
+    private Fight FindFight(Guid fightId)
+        => _fights.SingleOrDefault(f => f.Id == fightId)
+            ?? throw new InvalidOperationException("Fight not found in this event.");
+
+    private void EnsureAthleteNotInCard(Guid athleteId)
+    {
+        if (HasAthlete(athleteId))
+            throw new InvalidOperationException("Athlete already has a fight in this event.");
+    }
+
+    private void RecalculateBilling()
+    {
+        var ordered = _fights.OrderBy(f => f.Order).ToList();
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            var billing = i == ordered.Count - 1 ? FightBilling.Main
+                : i == ordered.Count - 2 ? FightBilling.CoMain
+                : FightBilling.Card;
+            ordered[i].SetBilling(billing);
+        }
     }
 
     private void SetDetails(string name, string? description, DateTime date, string? venue,
