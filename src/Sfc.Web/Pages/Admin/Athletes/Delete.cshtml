@@ -1,0 +1,16 @@
+@* src/Sfc.Web/Pages/Admin/Athletes/Delete.cshtml *@
+@page "{id:guid}"
+@model Sfc.Web.Pages.Admin.Athletes.DeleteModel
+@{
+    ViewData["Title"] = "Apagar atleta";
+}
+<h1 class="h3 mb-4">Apagar atleta</h1>
+<p>
+    Tem a certeza que quer apagar
+    <strong>@Model.Athlete?.FirstName @Model.Athlete?.LastName</strong>?
+    Esta ação não pode ser desfeita. Para afastamentos temporários, use antes o estado "Inativo" na edição.
+</p>
+<form method="post">
+    <button type="submit" class="btn btn-danger">Apagar</button>
+    <a asp-page="Index" class="btn btn-link">Cancelar</a>
+</form>

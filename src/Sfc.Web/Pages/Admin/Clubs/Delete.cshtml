@@ -1,0 +1,13 @@
+@* src/Sfc.Web/Pages/Admin/Clubs/Delete.cshtml *@
+@page "{id:guid}"
+@model Sfc.Web.Pages.Admin.Clubs.DeleteModel
+@{
+    ViewData["Title"] = "Apagar clube";
+}
+<h1 class="h3 mb-4">Apagar clube</h1>
+<div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+<p>Tem a certeza que quer apagar o clube <strong>@Model.Club?.Name</strong>? Esta ação não pode ser desfeita.</p>
+<form method="post">
+    <button type="submit" class="btn btn-danger">Apagar</button>
+    <a asp-page="Index" class="btn btn-link">Cancelar</a>
+</form>

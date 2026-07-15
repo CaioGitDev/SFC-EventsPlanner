@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Sfc.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using Sfc.Infrastructure.Persistence;
 namespace Sfc.Infrastructure.Migrations
 {
     [DbContext(typeof(SfcDbContext))]
-    partial class SfcDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260714135127_AddClubsAndAthletes")]
+    partial class AddClubsAndAthletes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -278,10 +281,6 @@ namespace Sfc.Infrastructure.Migrations
                     b.Property<string>("Nickname")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
 
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uuid");

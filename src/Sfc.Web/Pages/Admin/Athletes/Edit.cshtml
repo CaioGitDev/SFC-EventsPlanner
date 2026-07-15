@@ -1,0 +1,137 @@
+@* src/Sfc.Web/Pages/Admin/Athletes/Edit.cshtml *@
+@page "{id:guid}"
+@using Sfc.Domain.Athletes
+@using Sfc.Web.Services
+@model Sfc.Web.Pages.Admin.Athletes.EditModel
+@{
+    ViewData["Title"] = "Editar atleta";
+}
+<h1 class="h3 mb-4">Editar atleta</h1>
+<form method="post" enctype="multipart/form-data" class="col-12 col-lg-8">
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+    <div class="alert alert-secondary">
+        Cartel atual: <strong>@Model.RecordDisplay</strong> — o cartel só muda com resultados de combates.
+    </div>
+
+    <h2 class="h5">Identificação</h2>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label asp-for="Form.FirstName" class="form-label">Nome *</label>
+            <input asp-for="Form.FirstName" class="form-control" />
+            <span asp-validation-for="Form.FirstName" class="text-danger"></span>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label asp-for="Form.LastName" class="form-label">Apelido *</label>
+            <input asp-for="Form.LastName" class="form-control" />
+            <span asp-validation-for="Form.LastName" class="text-danger"></span>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <label asp-for="Form.Nickname" class="form-label">Alcunha</label>
+            <input asp-for="Form.Nickname" class="form-control" />
+        </div>
+        <div class="col-md-4 mb-3">
+            <label asp-for="Form.DateOfBirth" class="form-label">Data de nascimento *</label>
+            <input asp-for="Form.DateOfBirth" type="date" class="form-control" />
+            <span asp-validation-for="Form.DateOfBirth" class="text-danger"></span>
+        </div>
+        <div class="col-md-4 mb-3">
+            <label asp-for="Form.Nationality" class="form-label">Nacionalidade *</label>
+            <input asp-for="Form.Nationality" class="form-control" />
+            <span asp-validation-for="Form.Nationality" class="text-danger"></span>
+        </div>
+    </div>
+
+    <h2 class="h5 mt-2">Desportivo</h2>
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <label asp-for="Form.Discipline" class="form-label">Disciplina *</label>
+            <select asp-for="Form.Discipline" class="form-select">
+                <option value="">Escolher…</option>
+                @foreach (var d in Enum.GetValues<Discipline>())
+                {
+                    <option value="@d">@d.ToDisplay()</option>
+                }
+            </select>
+            <span asp-validation-for="Form.Discipline" class="text-danger"></span>
+        </div>
+        <div class="col-md-4 mb-3">
+            <label asp-for="Form.Status" class="form-label">Estatuto *</label>
+            <select asp-for="Form.Status" class="form-select">
+                <option value="">Escolher…</option>
+                @foreach (var s in Enum.GetValues<AthleteStatus>())
+                {
+                    <option value="@s">@s.ToDisplay()</option>
+                }
+            </select>
+            <span asp-validation-for="Form.Status" class="text-danger"></span>
+        </div>
+        <div class="col-md-4 mb-3">
+            <label asp-for="Form.ClubId" class="form-label">Clube</label>
+            <select asp-for="Form.ClubId" asp-items="Model.ClubOptions" class="form-select">
+                <option value="">Sem clube</option>
+            </select>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <label asp-for="Form.CoachName" class="form-label">Treinador</label>
+            <input asp-for="Form.CoachName" class="form-control" />
+        </div>
+        <div class="col-md-3 mb-3">
+            <label asp-for="Form.WeightClass" class="form-label">Categoria de peso</label>
+            <input asp-for="Form.WeightClass" class="form-control" placeholder="ex.: -72kg" />
+        </div>
+        <div class="col-md-2 mb-3">
+            <label asp-for="Form.WeightKg" class="form-label">Peso (kg)</label>
+            <input asp-for="Form.WeightKg" type="number" step="0.1" class="form-control" />
+            <span asp-validation-for="Form.WeightKg" class="text-danger"></span>
+        </div>
+        <div class="col-md-3 mb-3">
+            <label asp-for="Form.HeightCm" class="form-label">Altura (cm)</label>
+            <input asp-for="Form.HeightCm" type="number" class="form-control" />
+            <span asp-validation-for="Form.HeightCm" class="text-danger"></span>
+        </div>
+    </div>
+
+    <h2 class="h5 mt-2">Publicação e estado</h2>
+    <div class="form-check mb-3">
+        <input asp-for="Form.PublicProfileConsent" class="form-check-input" />
+        <label asp-for="Form.PublicProfileConsent" class="form-check-label">
+            Consentimento para perfil público (RGPD)
+        </label>
+    </div>
+    <div class="form-check mb-3">
+        <input asp-for="IsActive" class="form-check-input" />
+        <label asp-for="IsActive" class="form-check-label">Ativo</label>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Form.Notes" class="form-label">Notas internas</label>
+        <textarea asp-for="Form.Notes" class="form-control" rows="2"
+                  placeholder="ex.: consentimento do encarregado de educação recebido a 12/07/2026"></textarea>
+        <div class="form-text">Nunca aparecem no portal público. Usar para registar o consentimento do encarregado de educação de atletas menores (ADR-004).</div>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Form.Slug" class="form-label">Slug (URL pública)</label>
+        <input asp-for="Form.Slug" class="form-control" />
+        <span asp-validation-for="Form.Slug" class="text-danger"></span>
+    </div>
+    <div class="mb-4">
+        <label asp-for="Photo" class="form-label">Foto</label>
+        @if (Model.CurrentPhotoUrl is not null)
+        {
+            <div class="mb-2">
+                <img src="@Model.CurrentPhotoUrl" alt="Foto atual" width="80" height="80"
+                     class="rounded-circle object-fit-cover" />
+            </div>
+        }
+        <input asp-for="Photo" type="file" accept="image/*" class="form-control" />
+        <span asp-validation-for="Photo" class="text-danger"></span>
+        <div class="form-text">Carregar nova imagem substitui a atual.</div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Guardar</button>
+    <a asp-page="Index" class="btn btn-link">Cancelar</a>
+</form>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"] — SFC Backoffice</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/bootstrap.min.css" />
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" asp-page="/Index">SFC</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false"
+                aria-label="Alternar navegação">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="mainNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item"><a class="nav-link" asp-page="/Admin/Athletes/Index">Atletas</a></li>
+                <li class="nav-item"><a class="nav-link" asp-page="/Admin/Clubs/Index">Clubes</a></li>
+            </ul>
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <form method="post" asp-page="/Account/Logout" class="d-flex">
+                    <button type="submit" class="btn btn-outline-light btn-sm">Sair</button>
+                </form>
+            }
+        </div>
+    </div>
+</nav>
+<main class="container py-4">
+    @if (TempData["Success"] is string success)
+    {
+        <div class="alert alert-success alert-dismissible" role="alert">
+            @success
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+        </div>
+    }
+    @RenderBody()
+</main>
+<script src="~/lib/bootstrap/bootstrap.bundle.min.js"></script>
+</body>
+</html>

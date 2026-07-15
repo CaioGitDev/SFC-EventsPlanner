@@ -39,3 +39,12 @@ dotnet test
 ```
 
 Sem `SeedAdmin` configurado a app arranca na mesma — apenas não cria o utilizador admin.
+
+### Storage local (MinIO)
+
+As imagens são servidas diretamente do bucket `sfc-media`. O bucket é criado
+automaticamente no primeiro upload, mas é privado por defeito — para as imagens
+renderizarem no backoffice, permitir leitura anónima uma vez:
+
+    docker compose exec minio mc alias set local http://localhost:9000 minioadmin minioadmin
+    docker compose exec minio mc anonymous set download local/sfc-media
