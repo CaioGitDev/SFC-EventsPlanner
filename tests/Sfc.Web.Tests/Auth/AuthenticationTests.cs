@@ -48,4 +48,26 @@ public class AuthenticationTests(SfcWebApplicationFactory factory)
         var html = System.Net.WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
         Assert.Contains("Credenciais inválidas", html);
     }
+
+    [Fact]
+    public async Task Login_WithExternalReturnUrl_RedirectsToDefaultInsteadOfExternal()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+        });
+        var token = await AuthTestHelper.GetAntiforgeryTokenAsync(client, "/Account/Login");
+
+        var response = await client.PostAsync(
+            "/Account/Login?returnUrl=https://evil.example/phish",
+            new FormUrlEncodedContent(
+            [
+                new KeyValuePair<string, string>("Input.Email", "admin@test.local"),
+                new KeyValuePair<string, string>("Input.Password", "Test-Admin-2026!"),
+                new KeyValuePair<string, string>("__RequestVerificationToken", token),
+            ]));
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.DoesNotContain("evil.example", response.Headers.Location!.ToString());
+    }
 }
