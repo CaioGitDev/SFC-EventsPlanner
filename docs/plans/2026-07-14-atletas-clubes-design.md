@@ -80,7 +80,7 @@ de hífens. Unicidade é responsabilidade do service (sufixo `-2`, `-3`, … em 
   `Pages/Admin/Athletes/{Index,Create,Edit,Delete}`
 - Index de atletas: pesquisa combinável por nome (`ILIKE`), clube e disciplina; paginação simples
 - `ClubService` / `AthleteService` injetados; PageModels finos
-- UI em pt-PT, responsiva (telemóvel); Bootstrap 5 local; validação client+server
+- UI em pt-PT, responsiva (telemóvel); Bootstrap 5 local; validação server-side + HTML5 nativa (scripts jQuery de validação adiados até haver necessidade real)
 
 ## 5. Testes (TDD primeiro)
 
