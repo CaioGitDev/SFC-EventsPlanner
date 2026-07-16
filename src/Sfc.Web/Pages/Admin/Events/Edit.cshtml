@@ -1,6 +1,196 @@
-@* src/Sfc.Web/Pages/Admin/Events/Edit.cshtml — placeholder, replaced in Task 9 *@
+@* src/Sfc.Web/Pages/Admin/Events/Edit.cshtml — replaces the Task 8 placeholder *@
 @page "{id:guid}"
+@using Sfc.Domain.Events
+@using Sfc.Web.Services
+@model Sfc.Web.Pages.Admin.Events.EditModel
 @{
     ViewData["Title"] = "Editar evento";
+    var evt = Model.Event!;
+    var slugLocked = evt.PublishedAt is not null;
 }
-<h1 class="h3">Editar evento</h1>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">@evt.Name</h1>
+    <span class="badge fs-6 @(evt.Status switch
+    {
+        EventStatus.Published => "text-bg-success",
+        EventStatus.Completed => "text-bg-secondary",
+        EventStatus.Cancelled => "text-bg-danger",
+        _ => "text-bg-warning",
+    })">@evt.Status.ToDisplay()</span>
+</div>
+<div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+<div class="mb-4">
+    @if (evt.Status == EventStatus.Draft)
+    {
+        <form method="post" asp-page-handler="Publish" class="d-inline">
+            <button type="submit" class="btn btn-success btn-sm">Publicar</button>
+        </form>
+    }
+    @if (evt.Status == EventStatus.Published)
+    {
+        <form method="post" asp-page-handler="Unpublish" class="d-inline">
+            <button type="submit" class="btn btn-outline-warning btn-sm">Despublicar</button>
+        </form>
+        <form method="post" asp-page-handler="Complete" class="d-inline">
+            <button type="submit" class="btn btn-outline-secondary btn-sm">Concluir</button>
+        </form>
+    }
+    @if (evt.Status is EventStatus.Draft or EventStatus.Published)
+    {
+        <form method="post" asp-page-handler="Cancel" class="d-inline"
+              onsubmit="return confirm('Cancelar este evento?')">
+            <button type="submit" class="btn btn-outline-danger btn-sm">Cancelar evento</button>
+        </form>
+    }
+</div>
+
+<form method="post" enctype="multipart/form-data" class="col-12 col-lg-8 mb-5">
+    <div class="row">
+        <div class="col-md-8 mb-3">
+            <label asp-for="Form.Name" class="form-label">Nome *</label>
+            <input asp-for="Form.Name" class="form-control" />
+            <span asp-validation-for="Form.Name" class="text-danger"></span>
+        </div>
+        <div class="col-md-4 mb-3">
+            <label asp-for="Form.Date" class="form-label">Data e hora *</label>
+            <input asp-for="Form.Date" type="datetime-local" class="form-control" />
+            <span asp-validation-for="Form.Date" class="text-danger"></span>
+        </div>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Form.Description" class="form-label">Descrição</label>
+        <textarea asp-for="Form.Description" class="form-control" rows="3"></textarea>
+    </div>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label asp-for="Form.Venue" class="form-label">Local</label>
+            <input asp-for="Form.Venue" class="form-control" />
+        </div>
+        <div class="col-md-6 mb-3">
+            <label asp-for="Form.City" class="form-label">Cidade</label>
+            <input asp-for="Form.City" class="form-control" />
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label asp-for="Form.TicketsUrl" class="form-label">Link de bilhetes</label>
+            <input asp-for="Form.TicketsUrl" class="form-control" />
+            <span asp-validation-for="Form.TicketsUrl" class="text-danger"></span>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label asp-for="Form.StreamUrl" class="form-label">Link de streaming (YouTube)</label>
+            <input asp-for="Form.StreamUrl" class="form-control" />
+            <span asp-validation-for="Form.StreamUrl" class="text-danger"></span>
+        </div>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Form.Slug" class="form-label">Slug (URL pública)</label>
+        <input asp-for="Form.Slug" class="form-control" readonly="@slugLocked" />
+        <span asp-validation-for="Form.Slug" class="text-danger"></span>
+        @if (slugLocked)
+        {
+            <div class="form-text">Imutável depois da primeira publicação.</div>
+        }
+    </div>
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <label asp-for="Banner" class="form-label">Banner</label>
+            @if (evt.BannerUrl is not null)
+            {
+                <div class="mb-2"><img src="@evt.BannerUrl" alt="Banner atual" class="img-fluid rounded" style="max-height:80px" /></div>
+            }
+            <input asp-for="Banner" type="file" accept="image/*" class="form-control" />
+            <span asp-validation-for="Banner" class="text-danger"></span>
+        </div>
+        <div class="col-md-6 mb-4">
+            <label asp-for="Poster" class="form-label">Poster</label>
+            @if (evt.PosterUrl is not null)
+            {
+                <div class="mb-2"><img src="@evt.PosterUrl" alt="Poster atual" class="rounded" style="max-height:80px" /></div>
+            }
+            <input asp-for="Poster" type="file" accept="image/*" class="form-control" />
+            <span asp-validation-for="Poster" class="text-danger"></span>
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Guardar</button>
+    <a asp-page="Index" class="btn btn-link">Voltar</a>
+</form>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="h4 mb-0">Fight card</h2>
+    <a asp-page="Fights/Add" asp-route-eventId="@evt.Id" class="btn btn-primary btn-sm">Adicionar combate</a>
+</div>
+@if (evt.Fights.Count == 0)
+{
+    <p class="text-muted">Sem combates no card. O combate 1 abre a noite; o último é o combate principal.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Combate</th>
+                    <th class="d-none d-md-table-cell">Disciplina</th>
+                    <th class="d-none d-md-table-cell">Formato</th>
+                    <th class="d-none d-md-table-cell">Peso</th>
+                    <th>Billing</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var fight in evt.Fights)
+            {
+                <tr>
+                    <td>@fight.Order</td>
+                    <td>
+                        @fight.RedCornerAthlete?.FirstName @fight.RedCornerAthlete?.LastName
+                        <span class="text-muted">vs</span>
+                        @fight.BlueCornerAthlete?.FirstName @fight.BlueCornerAthlete?.LastName
+                        @if (fight.IsTitleFight)
+                        {
+                            <span class="badge text-bg-warning">Título</span>
+                        }
+                        @if (fight.IsAmateur)
+                        {
+                            <span class="badge text-bg-info">Amador</span>
+                        }
+                    </td>
+                    <td class="d-none d-md-table-cell">@fight.Discipline.ToDisplay()</td>
+                    <td class="d-none d-md-table-cell">@fight.Rounds×@(fight.RoundDurationMinutes)min</td>
+                    <td class="d-none d-md-table-cell">
+                        @(fight.WeightClass ?? $"{fight.CatchweightKg}kg (combinado)")
+                    </td>
+                    <td>
+                        <span class="badge @(fight.Billing switch
+                        {
+                            FightBilling.Main => "text-bg-danger",
+                            FightBilling.CoMain => "text-bg-primary",
+                            _ => "text-bg-secondary",
+                        })">@fight.Billing.ToDisplay()</span>
+                    </td>
+                    <td class="text-end text-nowrap">
+                        <form method="post" asp-page-handler="MoveUp" asp-route-fightId="@fight.Id" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Mover para cima">↑</button>
+                        </form>
+                        <form method="post" asp-page-handler="MoveDown" asp-route-fightId="@fight.Id" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Mover para baixo">↓</button>
+                        </form>
+                        @if (fight.Status == FightStatus.Scheduled)
+                        {
+                            <a asp-page="Fights/Replace" asp-route-eventId="@evt.Id" asp-route-fightId="@fight.Id"
+                               class="btn btn-sm btn-outline-primary">Substituir</a>
+                        }
+                        <form method="post" asp-page-handler="RemoveFight" asp-route-fightId="@fight.Id"
+                              class="d-inline" onsubmit="return confirm('Remover este combate do card?')">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Remover</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
