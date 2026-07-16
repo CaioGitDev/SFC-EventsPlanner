@@ -17,10 +17,19 @@ public class DeleteModel(AthleteService athleteService) : PageModel
 
     public async Task<IActionResult> OnPostAsync(Guid id, CancellationToken ct)
     {
-        if (!await athleteService.DeleteAsync(id, ct))
-            return NotFound();
-
-        TempData["Success"] = "Atleta apagado.";
-        return RedirectToPage("Index");
+        var result = await athleteService.DeleteAsync(id, ct);
+        switch (result)
+        {
+            case AthleteDeleteResult.NotFound:
+                return NotFound();
+            case AthleteDeleteResult.HasFights:
+                Athlete = await athleteService.GetAsync(id, ct);
+                ModelState.AddModelError(string.Empty,
+                    "Não é possível apagar um atleta com combates registados. Use antes o estado \"Inativo\".");
+                return Page();
+            default:
+                TempData["Success"] = "Atleta apagado.";
+                return RedirectToPage("Index");
+        }
     }
 }

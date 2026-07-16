@@ -17,6 +17,15 @@ public record AthleteListItem(Guid Id, string FullName, string? Nickname, string
 
 public record AthleteSearchResult(List<AthleteListItem> Items, int TotalCount, int Page, int PageSize);
 
+public enum AthleteDeleteResult
+{
+    Deleted,
+    NotFound,
+    HasFights,
+}
+
+public record AthleteOption(Guid Id, string Label);
+
 public class AthleteService(SfcDbContext db, IImageStorage imageStorage)
 {
     public const int PageSize = 20;
@@ -121,11 +130,14 @@ public class AthleteService(SfcDbContext db, IImageStorage imageStorage)
         return athlete;
     }
 
-    public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default)
+    public async Task<AthleteDeleteResult> DeleteAsync(Guid id, CancellationToken ct = default)
     {
         var athlete = await db.Athletes.SingleOrDefaultAsync(a => a.Id == id, ct);
         if (athlete is null)
-            return false;
+            return AthleteDeleteResult.NotFound;
+
+        if (await db.Fights.AnyAsync(f => f.RedCornerAthleteId == id || f.BlueCornerAthleteId == id, ct))
+            return AthleteDeleteResult.HasFights;
 
         db.Athletes.Remove(athlete);
         await db.SaveChangesAsync(ct);
@@ -133,7 +145,53 @@ public class AthleteService(SfcDbContext db, IImageStorage imageStorage)
         if (athlete.PhotoUrl is not null)
             await imageStorage.DeleteAsync($"athletes/{athlete.Id}.webp", ct);
 
-        return true;
+        return AthleteDeleteResult.Deleted;
+    }
+
+    public async Task<List<AthleteOption>> ListActiveOptionsAsync(string? name, Guid? clubId,
+        Discipline? discipline, CancellationToken ct = default)
+    {
+        var query = db.Athletes.AsNoTracking().Where(a => a.IsActive);
+
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            var pattern = $"%{name.Trim()}%";
+            query = query.Where(a =>
+                EF.Functions.ILike(a.FirstName + " " + a.LastName, pattern) ||
+                (a.Nickname != null && EF.Functions.ILike(a.Nickname, pattern)));
+        }
+
+        if (clubId is not null)
+            query = query.Where(a => a.ClubId == clubId);
+
+        if (discipline is not null)
+            query = query.Where(a => a.Discipline == discipline);
+
+        var rows = await query
+            .OrderBy(a => a.LastName).ThenBy(a => a.FirstName)
+            .Select(a => new
+            {
+                a.Id,
+                a.FirstName,
+                a.LastName,
+                a.Nickname,
+                ClubName = a.Club != null ? a.Club.Name : null,
+                a.BaselineWins,
+                a.BaselineLosses,
+                a.BaselineDraws,
+            })
+            .ToListAsync(ct);
+
+        return rows
+            .Select(r =>
+            {
+                var nickname = r.Nickname is null ? "" : $" '{r.Nickname}'";
+                var club = r.ClubName is null ? "" : $" · {r.ClubName}";
+                var label = $"{r.LastName}, {r.FirstName}{nickname} — " +
+                    $"{r.BaselineWins}-{r.BaselineLosses}-{r.BaselineDraws}{club}";
+                return new AthleteOption(r.Id, label);
+            })
+            .ToList();
     }
 
     private async Task<string> ResolveSlugAsync(AthleteInput input, Guid? excludeId,
