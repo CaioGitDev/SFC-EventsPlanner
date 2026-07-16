@@ -27,6 +27,20 @@ public enum EventTransitionResult
     InvalidTransition,
 }
 
+public record FightInput(Guid RedCornerAthleteId, Guid BlueCornerAthleteId,
+    Sfc.Domain.Athletes.Discipline Discipline, int Rounds, int RoundDurationMinutes,
+    string? WeightClass, decimal? CatchweightKg, bool IsTitleFight, bool IsAmateur);
+
+public enum CardOperationResult
+{
+    Success,
+    EventNotFound,
+    FightNotFound,
+    AthleteAlreadyInCard,
+    SameAthleteBothCorners,
+    FightNotScheduled,
+}
+
 public class EventService(SfcDbContext db, IImageStorage imageStorage)
 {
     private const int BannerMaxDimension = 1920;
@@ -122,6 +136,79 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
 
         return EventDeleteResult.Deleted;
     }
+
+    public async Task<CardOperationResult> AddFightAsync(Guid eventId, FightInput input,
+        CancellationToken ct = default)
+    {
+        var evt = await GetTrackedWithFightsAsync(eventId, ct);
+        if (evt is null)
+            return CardOperationResult.EventNotFound;
+        if (input.RedCornerAthleteId == input.BlueCornerAthleteId)
+            return CardOperationResult.SameAthleteBothCorners;
+        if (evt.HasAthlete(input.RedCornerAthleteId) || evt.HasAthlete(input.BlueCornerAthleteId))
+            return CardOperationResult.AthleteAlreadyInCard;
+
+        var fight = evt.AddFight(input.RedCornerAthleteId, input.BlueCornerAthleteId, input.Discipline,
+            input.Rounds, input.RoundDurationMinutes, input.WeightClass, input.CatchweightKg,
+            input.IsTitleFight, input.IsAmateur);
+        // Event.AddFight only mutates the aggregate's private collection; the new Fight's
+        // client-generated Guid key would otherwise make EF's change tracker mistake it for
+        // an existing (Modified) row instead of a new (Added) one, so it must be attached explicitly.
+        db.Fights.Add(fight);
+        await db.SaveChangesAsync(ct);
+        return CardOperationResult.Success;
+    }
+
+    public async Task<CardOperationResult> RemoveFightAsync(Guid eventId, Guid fightId,
+        CancellationToken ct = default)
+    {
+        var evt = await GetTrackedWithFightsAsync(eventId, ct);
+        if (evt is null)
+            return CardOperationResult.EventNotFound;
+
+        if (!evt.RemoveFight(fightId))
+            return CardOperationResult.FightNotFound;
+
+        await db.SaveChangesAsync(ct);
+        return CardOperationResult.Success;
+    }
+
+    public async Task<CardOperationResult> MoveFightAsync(Guid eventId, Guid fightId,
+        MoveDirection direction, CancellationToken ct = default)
+    {
+        var evt = await GetTrackedWithFightsAsync(eventId, ct);
+        if (evt is null)
+            return CardOperationResult.EventNotFound;
+        if (evt.Fights.All(f => f.Id != fightId))
+            return CardOperationResult.FightNotFound;
+
+        evt.MoveFight(fightId, direction);
+        await db.SaveChangesAsync(ct);
+        return CardOperationResult.Success;
+    }
+
+    public async Task<CardOperationResult> ReplaceAthleteAsync(Guid eventId, Guid fightId,
+        Corner corner, Guid newAthleteId, CancellationToken ct = default)
+    {
+        var evt = await GetTrackedWithFightsAsync(eventId, ct);
+        if (evt is null)
+            return CardOperationResult.EventNotFound;
+
+        var fight = evt.Fights.SingleOrDefault(f => f.Id == fightId);
+        if (fight is null)
+            return CardOperationResult.FightNotFound;
+        if (fight.Status != FightStatus.Scheduled)
+            return CardOperationResult.FightNotScheduled;
+        if (evt.HasAthlete(newAthleteId))
+            return CardOperationResult.AthleteAlreadyInCard;
+
+        evt.ReplaceAthlete(fightId, corner, newAthleteId);
+        await db.SaveChangesAsync(ct);
+        return CardOperationResult.Success;
+    }
+
+    private Task<Event?> GetTrackedWithFightsAsync(Guid id, CancellationToken ct)
+        => db.Events.Include(e => e.Fights).SingleOrDefaultAsync(e => e.Id == id, ct);
 
     private async Task<EventTransitionResult> TransitionAsync(Guid id, Action<Event> transition,
         CancellationToken ct)
