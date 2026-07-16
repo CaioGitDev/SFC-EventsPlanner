@@ -25,17 +25,7 @@ public class EditModel(EventService eventService) : PageModel
         if (Event is null)
             return NotFound();
 
-        Form = new EventForm
-        {
-            Name = Event.Name,
-            Description = Event.Description,
-            Date = Event.Date,
-            Venue = Event.Venue,
-            City = Event.City,
-            TicketsUrl = Event.TicketsUrl,
-            StreamUrl = Event.StreamUrl,
-            Slug = Event.Slug,
-        };
+        PopulateFormFrom(Event);
         return Page();
     }
 
@@ -107,8 +97,16 @@ public class EditModel(EventService eventService) : PageModel
             case EventTransitionResult.NotFound:
                 return NotFound();
             case EventTransitionResult.InvalidTransition:
+                // Transition POSTs carry no Form.* fields, so binding left Form blank and
+                // ModelState full of spurious required-field errors. Clear them (tag helpers
+                // render input values from ModelState in preference to the model), keep only
+                // the transition error, and rebuild Form from the stored event.
+                ModelState.Clear();
                 ModelState.AddModelError(string.Empty, "Transição de estado inválida.");
-                return await ReloadAsync(id, ct);
+                var reload = await ReloadAsync(id, ct);
+                if (Event is not null)
+                    PopulateFormFrom(Event);
+                return reload;
             default:
                 TempData["Success"] = successMessage;
                 return RedirectToPage(new { id });
@@ -120,4 +118,17 @@ public class EditModel(EventService eventService) : PageModel
         Event = await eventService.GetWithCardAsync(id, ct);
         return Event is null ? NotFound() : Page();
     }
+
+    private void PopulateFormFrom(Event evt)
+        => Form = new EventForm
+        {
+            Name = evt.Name,
+            Description = evt.Description,
+            Date = evt.Date,
+            Venue = evt.Venue,
+            City = evt.City,
+            TicketsUrl = evt.TicketsUrl,
+            StreamUrl = evt.StreamUrl,
+            Slug = evt.Slug,
+        };
 }

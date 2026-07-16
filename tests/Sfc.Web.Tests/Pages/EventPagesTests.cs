@@ -118,4 +118,31 @@ public class EventPagesTests(SfcWebApplicationFactory factory)
 
         Assert.Contains("Publicado", html);
     }
+
+    [Fact]
+    public async Task Edit_InvalidTransition_ShowsErrorWithoutCorruptingForm()
+    {
+        using var scope = factory.Services.CreateScope();
+        var events = scope.ServiceProvider.GetRequiredService<EventService>();
+        var evt = await events.CreateAsync(new EventInput("Evento Transição Inválida", null,
+            new DateTime(2026, 12, 18, 20, 0, 0), null, null, null, null, null), null, null);
+
+        using var client = factory.CreateClient();
+        await AuthTestHelper.LoginAsAdminAsync(client);
+        var token = await AuthTestHelper.GetAntiforgeryTokenAsync(client, $"/Admin/Events/Edit/{evt.Id}");
+
+        // Complete is invalid from Draft.
+        var response = await client.PostAsync($"/Admin/Events/Edit/{evt.Id}?handler=Complete",
+            new FormUrlEncodedContent(
+            [
+                new KeyValuePair<string, string>("__RequestVerificationToken", token),
+            ]));
+        var html = System.Net.WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+
+        Assert.Contains("Transição de estado inválida.", html);
+        // ">...<" targets the rendered validation span; the bare message always appears
+        // in the input's data-val-required attribute emitted by the tag helper.
+        Assert.DoesNotContain(">O nome é obrigatório.<", html);
+        Assert.Contains("value=\"Evento Transição Inválida\"", html);
+    }
 }
