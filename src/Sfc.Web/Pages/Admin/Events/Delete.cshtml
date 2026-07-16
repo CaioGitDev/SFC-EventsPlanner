@@ -1,0 +1,16 @@
+@* src/Sfc.Web/Pages/Admin/Events/Delete.cshtml *@
+@page "{id:guid}"
+@model Sfc.Web.Pages.Admin.Events.DeleteModel
+@{
+    ViewData["Title"] = "Apagar evento";
+}
+<h1 class="h3 mb-4">Apagar evento</h1>
+<div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+<p>
+    Tem a certeza que quer apagar o evento <strong>@Model.Event?.Name</strong>
+    (@Model.Event?.Fights.Count combates no card)? Esta ação não pode ser desfeita.
+</p>
+<form method="post">
+    <button type="submit" class="btn btn-danger">Apagar</button>
+    <a asp-page="Index" class="btn btn-link">Cancelar</a>
+</form>

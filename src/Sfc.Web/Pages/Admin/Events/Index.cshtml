@@ -1,0 +1,74 @@
+@* src/Sfc.Web/Pages/Admin/Events/Index.cshtml *@
+@page
+@using Sfc.Domain.Events
+@using Sfc.Web.Services
+@model Sfc.Web.Pages.Admin.Events.IndexModel
+@{
+    ViewData["Title"] = "Eventos";
+}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Eventos</h1>
+    <a asp-page="Create" class="btn btn-primary">Novo evento</a>
+</div>
+<form method="get" class="row g-2 mb-3">
+    <div class="col-12 col-md-5">
+        <input asp-for="Search" class="form-control" placeholder="Pesquisar por nome…" />
+    </div>
+    <div class="col-6 col-md-3">
+        <select asp-for="Status" class="form-select">
+            <option value="">Todos os estados</option>
+            @foreach (var s in Enum.GetValues<EventStatus>())
+            {
+                <option value="@s">@s.ToDisplay()</option>
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-outline-secondary">Filtrar</button>
+    </div>
+</form>
+@if (Model.Events.Count == 0)
+{
+    <p class="text-muted">Sem eventos para os filtros escolhidos.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Data</th>
+                    <th class="d-none d-md-table-cell">Cidade</th>
+                    <th class="d-none d-md-table-cell">Combates</th>
+                    <th>Estado</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var evt in Model.Events)
+            {
+                <tr>
+                    <td>@evt.Name</td>
+                    <td>@evt.Date.ToString("dd/MM/yyyy HH:mm")</td>
+                    <td class="d-none d-md-table-cell">@evt.City</td>
+                    <td class="d-none d-md-table-cell">@evt.FightCount</td>
+                    <td>
+                        <span class="badge @(evt.Status switch
+                        {
+                            EventStatus.Published => "text-bg-success",
+                            EventStatus.Completed => "text-bg-secondary",
+                            EventStatus.Cancelled => "text-bg-danger",
+                            _ => "text-bg-warning",
+                        })">@evt.Status.ToDisplay()</span>
+                    </td>
+                    <td class="text-end">
+                        <a asp-page="Edit" asp-route-id="@evt.Id" class="btn btn-sm btn-outline-secondary">Editar</a>
+                        <a asp-page="Delete" asp-route-id="@evt.Id" class="btn btn-sm btn-outline-danger">Apagar</a>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
