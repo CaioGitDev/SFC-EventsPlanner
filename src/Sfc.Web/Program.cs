@@ -46,6 +46,7 @@ builder.Services.AddSingleton<IImageStorage, S3ImageStorage>();
 
 builder.Services.AddScoped<ClubService>();
 builder.Services.AddScoped<AthleteService>();
+builder.Services.AddScoped<EventService>();
 
 var app = builder.Build();
 

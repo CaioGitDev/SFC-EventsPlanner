@@ -1,4 +1,5 @@
 using Sfc.Domain.Athletes;
+using Sfc.Domain.Events;
 
 namespace Sfc.Web.Services;
 
@@ -20,5 +21,22 @@ public static class PtDisplay
         AthleteStatus.Amateur => "Amador",
         AthleteStatus.Professional => "Profissional",
         _ => status.ToString(),
+    };
+
+    public static string ToDisplay(this EventStatus status) => status switch
+    {
+        EventStatus.Draft => "Rascunho",
+        EventStatus.Published => "Publicado",
+        EventStatus.Completed => "Concluído",
+        EventStatus.Cancelled => "Cancelado",
+        _ => status.ToString(),
+    };
+
+    public static string ToDisplay(this FightBilling billing) => billing switch
+    {
+        FightBilling.Main => "Combate principal",
+        FightBilling.CoMain => "Co-main",
+        FightBilling.Card => "Card",
+        _ => billing.ToString(),
     };
 }
