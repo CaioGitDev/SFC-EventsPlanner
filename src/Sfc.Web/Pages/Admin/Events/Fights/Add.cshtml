@@ -1,0 +1,101 @@
+@* src/Sfc.Web/Pages/Admin/Events/Fights/Add.cshtml *@
+@page "{eventId:guid}"
+@using Sfc.Domain.Athletes
+@using Sfc.Web.Services
+@model Sfc.Web.Pages.Admin.Events.Fights.AddModel
+@{
+    ViewData["Title"] = "Adicionar combate";
+}
+<h1 class="h3 mb-1">Adicionar combate</h1>
+<p class="text-muted mb-4">@Model.Event?.Name</p>
+
+<form method="get" class="row g-2 mb-3">
+    <input type="hidden" name="eventId" value="@Model.Event?.Id" />
+    <div class="col-12 col-md-4">
+        <input asp-for="FilterName" class="form-control" placeholder="Filtrar atletas por nome…" />
+    </div>
+    <div class="col-6 col-md-3">
+        <select asp-for="FilterClubId" asp-items="Model.ClubOptions" class="form-select">
+            <option value="">Todos os clubes</option>
+        </select>
+    </div>
+    <div class="col-6 col-md-3">
+        <select asp-for="FilterDiscipline" class="form-select">
+            <option value="">Todas as disciplinas</option>
+            @foreach (var d in Enum.GetValues<Discipline>())
+            {
+                <option value="@d">@d.ToDisplay()</option>
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-outline-secondary">Filtrar</button>
+    </div>
+</form>
+
+<form method="post" class="col-12 col-lg-8">
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label asp-for="Form.RedCornerAthleteId" class="form-label">Canto vermelho *</label>
+            <select asp-for="Form.RedCornerAthleteId" asp-items="Model.AthleteOptions" class="form-select">
+                <option value="">Escolher atleta…</option>
+            </select>
+            <span asp-validation-for="Form.RedCornerAthleteId" class="text-danger"></span>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label asp-for="Form.BlueCornerAthleteId" class="form-label">Canto azul *</label>
+            <select asp-for="Form.BlueCornerAthleteId" asp-items="Model.AthleteOptions" class="form-select">
+                <option value="">Escolher atleta…</option>
+            </select>
+            <span asp-validation-for="Form.BlueCornerAthleteId" class="text-danger"></span>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <label asp-for="Form.Discipline" class="form-label">Disciplina *</label>
+            <select asp-for="Form.Discipline" class="form-select">
+                <option value="">Escolher…</option>
+                @foreach (var d in Enum.GetValues<Discipline>())
+                {
+                    <option value="@d">@d.ToDisplay()</option>
+                }
+            </select>
+            <span asp-validation-for="Form.Discipline" class="text-danger"></span>
+        </div>
+        <div class="col-md-4 mb-3">
+            <label asp-for="Form.Rounds" class="form-label">Rounds</label>
+            <input asp-for="Form.Rounds" type="number" class="form-control" />
+            <span asp-validation-for="Form.Rounds" class="text-danger"></span>
+        </div>
+        <div class="col-md-4 mb-3">
+            <label asp-for="Form.RoundDurationMinutes" class="form-label">Minutos por round</label>
+            <input asp-for="Form.RoundDurationMinutes" type="number" class="form-control" />
+            <span asp-validation-for="Form.RoundDurationMinutes" class="text-danger"></span>
+            <div class="form-text">Amador: tipicamente 3×2; profissional: 3×3 (MMA 5 min).</div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label asp-for="Form.WeightClass" class="form-label">Categoria de peso</label>
+            <input asp-for="Form.WeightClass" class="form-control" placeholder="ex.: -72kg" />
+            <span asp-validation-for="Form.WeightClass" class="text-danger"></span>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label asp-for="Form.CatchweightKg" class="form-label">Peso combinado (kg)</label>
+            <input asp-for="Form.CatchweightKg" type="number" step="0.1" class="form-control" />
+            <span asp-validation-for="Form.CatchweightKg" class="text-danger"></span>
+            <div class="form-text">Preencher apenas um: categoria OU peso combinado.</div>
+        </div>
+    </div>
+    <div class="form-check mb-2">
+        <input asp-for="Form.IsTitleFight" class="form-check-input" />
+        <label asp-for="Form.IsTitleFight" class="form-check-label">Combate de título</label>
+    </div>
+    <div class="form-check mb-4">
+        <input asp-for="Form.IsAmateur" class="form-check-input" />
+        <label asp-for="Form.IsAmateur" class="form-check-label">Amador</label>
+    </div>
+    <button type="submit" class="btn btn-primary">Adicionar</button>
+    <a asp-page="/Admin/Events/Edit" asp-route-id="@Model.Event?.Id" class="btn btn-link">Cancelar</a>
+</form>
