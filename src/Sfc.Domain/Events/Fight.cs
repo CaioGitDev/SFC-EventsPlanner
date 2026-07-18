@@ -31,6 +31,10 @@ public class Fight : IOrganizationScoped
     public Guid BlueCornerAthleteId { get; private set; }
     public Athlete? BlueCornerAthlete { get; private set; }
     public FightStatus Status { get; private set; }
+
+    /// <summary>1:1 result; null while scheduled, cancelled, or no contest without a ruling.</summary>
+    public FightResult? Result { get; private set; }
+
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
@@ -91,6 +95,71 @@ public class Fight : IOrganizationScoped
         Billing = billing;
         UpdatedAt = DateTime.UtcNow;
     }
+
+    internal FightResult RecordResult(Guid? winnerAthleteId, FightResultMethod method,
+        int? round, string? time)
+    {
+        if (Status != FightStatus.Scheduled)
+            throw new InvalidOperationException("Only scheduled fights can receive a result.");
+
+        Result = new FightResult(this, winnerAthleteId, method, round, time);
+        Status = StatusFor(method);
+        UpdatedAt = DateTime.UtcNow;
+        return Result;
+    }
+
+    internal FightResult ChangeResult(Guid? winnerAthleteId, FightResultMethod method,
+        int? round, string? time)
+    {
+        if (Result is null)
+            throw new InvalidOperationException("This fight has no result to change.");
+
+        Result.Update(this, winnerAthleteId, method, round, time);
+        Status = StatusFor(method);
+        UpdatedAt = DateTime.UtcNow;
+        return Result;
+    }
+
+    internal void DeleteResult()
+    {
+        if (Result is null)
+            throw new InvalidOperationException("This fight has no result to delete.");
+
+        Result = null;
+        Status = FightStatus.Scheduled;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    internal void Cancel()
+    {
+        if (Status != FightStatus.Scheduled)
+            throw new InvalidOperationException("Only scheduled fights can be cancelled.");
+
+        Status = FightStatus.Cancelled;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    internal void MarkNoContest()
+    {
+        if (Status != FightStatus.Scheduled)
+            throw new InvalidOperationException("Only scheduled fights can be marked no contest.");
+
+        Status = FightStatus.NoContest;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    internal void Reinstate()
+    {
+        if (Result is not null || Status is not (FightStatus.Cancelled or FightStatus.NoContest))
+            throw new InvalidOperationException(
+                "Only cancelled or no-contest fights without a result can be reinstated.");
+
+        Status = FightStatus.Scheduled;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    private static FightStatus StatusFor(FightResultMethod method)
+        => method == FightResultMethod.NoContest ? FightStatus.NoContest : FightStatus.Completed;
 
     internal void ReplaceCorner(Corner corner, Guid athleteId)
     {
