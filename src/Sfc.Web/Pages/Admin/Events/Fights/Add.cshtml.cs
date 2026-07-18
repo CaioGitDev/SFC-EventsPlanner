@@ -80,6 +80,10 @@ public class AddModel(EventService eventService, AthleteService athleteService,
         {
             case CardOperationResult.EventNotFound:
                 return NotFound();
+            case CardOperationResult.EventLocked:
+                ModelState.AddModelError(string.Empty,
+                    "O card de um evento concluído ou cancelado não pode ser alterado.");
+                return await ReloadAsync(eventId, ct);
             case CardOperationResult.AthleteAlreadyInCard:
                 ModelState.AddModelError(string.Empty,
                     "Um dos atletas já tem combate neste evento.");

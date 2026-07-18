@@ -18,6 +18,30 @@ public class EventCardFlowTests(SfcWebApplicationFactory factory)
         => new(red, blue, Discipline.MuayThai, 3, 3, "-72kg", null, false, false);
 
     [Fact]
+    public async Task CardOperations_OnCancelledEvent_ReturnEventLocked()
+    {
+        using var scope = factory.Services.CreateScope();
+        var events = scope.ServiceProvider.GetRequiredService<EventService>();
+        var athletes = scope.ServiceProvider.GetRequiredService<AthleteService>();
+        var a1 = await athletes.CreateAsync(AthleteInput("Locked", "Um"), (0, 0, 0, 0), null);
+        var a2 = await athletes.CreateAsync(AthleteInput("Locked", "Dois"), (0, 0, 0, 0), null);
+        var evt = await events.CreateAsync(new EventInput("Evento Trancado", null,
+            new DateTime(2026, 12, 28, 20, 0, 0), null, null, null, null, null), null, null);
+        await events.AddFightAsync(evt.Id, Fight(a1.Id, a2.Id));
+        var fightId = (await events.GetWithCardAsync(evt.Id))!.Fights[0].Id;
+        await events.CancelAsync(evt.Id);
+
+        Assert.Equal(CardOperationResult.EventLocked,
+            await events.AddFightAsync(evt.Id, Fight(a1.Id, a2.Id)));
+        Assert.Equal(CardOperationResult.EventLocked,
+            await events.RemoveFightAsync(evt.Id, fightId));
+        Assert.Equal(CardOperationResult.EventLocked,
+            await events.MoveFightAsync(evt.Id, fightId, MoveDirection.Up));
+        Assert.Equal(CardOperationResult.EventLocked,
+            await events.ReplaceAthleteAsync(evt.Id, fightId, Corner.Blue, a2.Id));
+    }
+
+    [Fact]
     public async Task FullCardFlow_AddMoveReplaceRemove()
     {
         using var scope = factory.Services.CreateScope();

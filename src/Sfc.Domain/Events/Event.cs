@@ -134,6 +134,7 @@ public class Event : IOrganizationScoped
         Discipline discipline, int rounds, int roundDurationMinutes,
         string? weightClass, decimal? catchweightKg, bool isTitleFight, bool isAmateur)
     {
+        EnsureCardEditable();
         EnsureAthleteNotInCard(redCornerAthleteId);
         EnsureAthleteNotInCard(blueCornerAthleteId);
 
@@ -148,6 +149,7 @@ public class Event : IOrganizationScoped
 
     public bool RemoveFight(Guid fightId)
     {
+        EnsureCardEditable();
         var fight = _fights.SingleOrDefault(f => f.Id == fightId);
         if (fight is null)
             return false;
@@ -164,6 +166,7 @@ public class Event : IOrganizationScoped
     /// <summary>Up = earlier in the night (lower Order); Down = towards the main event.</summary>
     public bool MoveFight(Guid fightId, MoveDirection direction)
     {
+        EnsureCardEditable();
         var fight = FindFight(fightId);
         var targetOrder = direction == MoveDirection.Up ? fight.Order - 1 : fight.Order + 1;
         var neighbour = _fights.SingleOrDefault(f => f.Order == targetOrder);
@@ -179,6 +182,7 @@ public class Event : IOrganizationScoped
 
     public void ReplaceAthlete(Guid fightId, Corner corner, Guid newAthleteId)
     {
+        EnsureCardEditable();
         var fight = FindFight(fightId);
         EnsureAthleteNotInCard(newAthleteId);
         fight.ReplaceCorner(corner, newAthleteId);
@@ -191,6 +195,13 @@ public class Event : IOrganizationScoped
     private Fight FindFight(Guid fightId)
         => _fights.SingleOrDefault(f => f.Id == fightId)
             ?? throw new InvalidOperationException("Fight not found in this event.");
+
+    private void EnsureCardEditable()
+    {
+        if (Status is EventStatus.Completed or EventStatus.Cancelled)
+            throw new InvalidOperationException(
+                "The card of a completed or cancelled event cannot be changed.");
+    }
 
     private void EnsureAthleteNotInCard(Guid athleteId)
     {

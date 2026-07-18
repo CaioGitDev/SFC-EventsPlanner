@@ -39,6 +39,7 @@ public enum CardOperationResult
     AthleteAlreadyInCard,
     SameAthleteBothCorners,
     FightNotScheduled,
+    EventLocked,
 }
 
 public class EventService(SfcDbContext db, IImageStorage imageStorage)
@@ -143,6 +144,8 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         var evt = await GetTrackedWithFightsAsync(eventId, ct);
         if (evt is null)
             return CardOperationResult.EventNotFound;
+        if (IsCardLocked(evt))
+            return CardOperationResult.EventLocked;
         if (input.RedCornerAthleteId == input.BlueCornerAthleteId)
             return CardOperationResult.SameAthleteBothCorners;
         if (evt.HasAthlete(input.RedCornerAthleteId) || evt.HasAthlete(input.BlueCornerAthleteId))
@@ -165,6 +168,8 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         var evt = await GetTrackedWithFightsAsync(eventId, ct);
         if (evt is null)
             return CardOperationResult.EventNotFound;
+        if (IsCardLocked(evt))
+            return CardOperationResult.EventLocked;
 
         if (!evt.RemoveFight(fightId))
             return CardOperationResult.FightNotFound;
@@ -179,6 +184,8 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         var evt = await GetTrackedWithFightsAsync(eventId, ct);
         if (evt is null)
             return CardOperationResult.EventNotFound;
+        if (IsCardLocked(evt))
+            return CardOperationResult.EventLocked;
         if (evt.Fights.All(f => f.Id != fightId))
             return CardOperationResult.FightNotFound;
 
@@ -193,6 +200,8 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         var evt = await GetTrackedWithFightsAsync(eventId, ct);
         if (evt is null)
             return CardOperationResult.EventNotFound;
+        if (IsCardLocked(evt))
+            return CardOperationResult.EventLocked;
 
         var fight = evt.Fights.SingleOrDefault(f => f.Id == fightId);
         if (fight is null)
@@ -209,6 +218,9 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
 
     private Task<Event?> GetTrackedWithFightsAsync(Guid id, CancellationToken ct)
         => db.Events.Include(e => e.Fights).SingleOrDefaultAsync(e => e.Id == id, ct);
+
+    private static bool IsCardLocked(Event evt)
+        => evt.Status is EventStatus.Completed or EventStatus.Cancelled;
 
     private async Task<EventTransitionResult> TransitionAsync(Guid id, Action<Event> transition,
         CancellationToken ct)

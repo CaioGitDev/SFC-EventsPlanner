@@ -184,6 +184,26 @@ public class FightCardTests
             evt.ReplaceAthlete(fight.Id, Corner.Blue, fight.RedCornerAthleteId));
     }
 
+    [Theory]
+    [InlineData(true)]  // completed
+    [InlineData(false)] // cancelled
+    public void CardOperations_OnFinishedEvent_Throw(bool complete)
+    {
+        var evt = CreateEvent();
+        var fight = AddFight(evt);
+        evt.Publish();
+        if (complete)
+            evt.Complete();
+        else
+            evt.Cancel();
+
+        Assert.Throws<InvalidOperationException>(() => AddFight(evt));
+        Assert.Throws<InvalidOperationException>(() => evt.RemoveFight(fight.Id));
+        Assert.Throws<InvalidOperationException>(() => evt.MoveFight(fight.Id, MoveDirection.Up));
+        Assert.Throws<InvalidOperationException>(() =>
+            evt.ReplaceAthlete(fight.Id, Corner.Blue, Guid.NewGuid()));
+    }
+
     [Fact]
     public void HasAthlete_FindsAthleteInEitherCorner()
     {

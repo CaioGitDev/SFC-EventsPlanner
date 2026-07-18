@@ -7,6 +7,7 @@
     ViewData["Title"] = "Editar evento";
     var evt = Model.Event!;
     var slugLocked = evt.PublishedAt is not null;
+    var cardLocked = evt.Status is EventStatus.Completed or EventStatus.Cancelled;
 }
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="h3 mb-0">@evt.Name</h1>
@@ -32,7 +33,8 @@
         <form method="post" asp-page-handler="Unpublish" class="d-inline">
             <button type="submit" class="btn btn-outline-warning btn-sm">Despublicar</button>
         </form>
-        <form method="post" asp-page-handler="Complete" class="d-inline">
+        <form method="post" asp-page-handler="Complete" class="d-inline"
+              onsubmit="return confirm('Concluir este evento? Esta ação não pode ser revertida.')">
             <button type="submit" class="btn btn-outline-secondary btn-sm">Concluir</button>
         </form>
     }
@@ -119,8 +121,15 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2 class="h4 mb-0">Fight card</h2>
-    <a asp-page="Fights/Add" asp-route-eventId="@evt.Id" class="btn btn-primary btn-sm">Adicionar combate</a>
+    @if (!cardLocked)
+    {
+        <a asp-page="Fights/Add" asp-route-eventId="@evt.Id" class="btn btn-primary btn-sm">Adicionar combate</a>
+    }
 </div>
+@if (cardLocked)
+{
+    <p class="text-muted">O card de um evento concluído ou cancelado não pode ser alterado.</p>
+}
 @if (evt.Fights.Count == 0)
 {
     <p class="text-muted">Sem combates no card. O combate 1 abre a noite; o último é o combate principal.</p>
@@ -172,21 +181,24 @@ else
                         })">@fight.Billing.ToDisplay()</span>
                     </td>
                     <td class="text-end text-nowrap">
-                        <form method="post" asp-page-handler="MoveUp" asp-route-fightId="@fight.Id" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Mover para cima">↑</button>
-                        </form>
-                        <form method="post" asp-page-handler="MoveDown" asp-route-fightId="@fight.Id" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Mover para baixo">↓</button>
-                        </form>
-                        @if (fight.Status == FightStatus.Scheduled)
+                        @if (!cardLocked)
                         {
-                            <a asp-page="Fights/Replace" asp-route-eventId="@evt.Id" asp-route-fightId="@fight.Id"
-                               class="btn btn-sm btn-outline-primary">Substituir</a>
+                            <form method="post" asp-page-handler="MoveUp" asp-route-fightId="@fight.Id" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Mover para cima">↑</button>
+                            </form>
+                            <form method="post" asp-page-handler="MoveDown" asp-route-fightId="@fight.Id" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Mover para baixo">↓</button>
+                            </form>
+                            @if (fight.Status == FightStatus.Scheduled)
+                            {
+                                <a asp-page="Fights/Replace" asp-route-eventId="@evt.Id" asp-route-fightId="@fight.Id"
+                                   class="btn btn-sm btn-outline-primary">Substituir</a>
+                            }
+                            <form method="post" asp-page-handler="RemoveFight" asp-route-fightId="@fight.Id"
+                                  class="d-inline" onsubmit="return confirm('Remover este combate do card?')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Remover</button>
+                            </form>
                         }
-                        <form method="post" asp-page-handler="RemoveFight" asp-route-fightId="@fight.Id"
-                              class="d-inline" onsubmit="return confirm('Remover este combate do card?')">
-                            <button type="submit" class="btn btn-sm btn-outline-danger">Remover</button>
-                        </form>
                     </td>
                 </tr>
             }
