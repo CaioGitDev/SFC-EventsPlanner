@@ -15,7 +15,7 @@ atleta), com as regras de domínio testadas primeiro (TDD).
 | Base | PR #3 merged na master antes de começar; branch `feature/eventos-fightcard` a partir de master |
 | Billing | Derivado da posição: último Order = Main, penúltimo = CoMain (se ≥2), resto Card; recalculado a cada alteração do card — nunca editado à mão |
 | Estrutura do card | `Event` é aggregate root dos `Fights`; operações e invariantes como métodos de domínio |
-| Data do evento | `DateTime` UTC com hora (o countdown do portal precisa da hora) |
+| Data do evento | `DateTime` naive local com hora (coluna `timestamp without time zone`) — app de país único; o portal interpretará Europa/Lisboa; o countdown continua a ter hora. Substitui a redação inicial "UTC" desta linha. |
 | Slug de evento | Gerado do nome, editável enquanto `PublishedAt == null`; imutável após a primeira publicação (regra 7) |
 | Peso do combate | `WeightClass` (string) XOR `CatchweightKg` (decimal) — exatamente um |
 | Substituição | `ReplaceAthlete(fightId, corner, novoAtletaId)` apenas em combates `Scheduled` |
@@ -27,7 +27,7 @@ atleta), com as regras de domínio testadas primeiro (TDD).
 ### Event
 
 - `Id`, `OrganizationId` (`IOrganizationScoped`), `CreatedAt`, `UpdatedAt`
-- `Name` (obrig.), `Slug` (único por org), `Description?`, `Date` (DateTime UTC), `Venue?`,
+- `Name` (obrig.), `Slug` (único por org), `Description?`, `Date` (DateTime naive local), `Venue?`,
   `City?`, `BannerUrl?`, `PosterUrl?`, `TicketsUrl?`, `StreamUrl?`
 - `Status` (`EventStatus { Draft, Published, Completed, Cancelled }`), default Draft
 - `PublishedAt?` — definido na primeira publicação; ancora a imutabilidade do slug

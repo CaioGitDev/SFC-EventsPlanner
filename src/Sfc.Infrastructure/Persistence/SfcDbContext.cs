@@ -123,10 +123,10 @@ public class SfcDbContext(DbContextOptions<SfcDbContext> options)
 
     /// <summary>
     /// Applies the tenant global query filter to every entity implementing
-    /// <see cref="IOrganizationScoped"/> (ADR-002). <see cref="Club"/> and
-    /// <see cref="Athlete"/> are filtered today; the convention guarantees
-    /// every future <see cref="IOrganizationScoped"/> entity is filtered
-    /// automatically, from day one.
+    /// <see cref="IOrganizationScoped"/> (ADR-002) — currently Club, Athlete,
+    /// Event and Fight; the convention guarantees every future
+    /// <see cref="IOrganizationScoped"/> entity is filtered automatically,
+    /// from day one.
     /// </summary>
     private void ApplyOrganizationQueryFilters(ModelBuilder builder)
     {
