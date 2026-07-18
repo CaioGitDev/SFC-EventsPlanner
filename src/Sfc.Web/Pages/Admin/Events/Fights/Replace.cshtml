@@ -1,6 +1,8 @@
 @* src/Sfc.Web/Pages/Admin/Events/Fights/Replace.cshtml *@
 @page "{eventId:guid}/{fightId:guid}"
+@using Sfc.Domain.Athletes
 @using Sfc.Domain.Events
+@using Sfc.Web.Services
 @model Sfc.Web.Pages.Admin.Events.Fights.ReplaceModel
 @{
     ViewData["Title"] = "Substituir atleta";
@@ -19,12 +21,27 @@
     <div class="col-12 col-md-4">
         <input asp-for="FilterName" class="form-control" placeholder="Filtrar atletas por nome…" />
     </div>
+    <div class="col-6 col-md-3">
+        <select asp-for="FilterClubId" asp-items="Model.ClubOptions" class="form-select">
+            <option value="">Todos os clubes</option>
+        </select>
+    </div>
+    <div class="col-6 col-md-3">
+        <select asp-for="FilterDiscipline" class="form-select">
+            <option value="">Todas as disciplinas</option>
+            @foreach (var d in Enum.GetValues<Discipline>())
+            {
+                <option value="@d">@d.ToDisplay()</option>
+            }
+        </select>
+    </div>
     <div class="col-auto">
         <button type="submit" class="btn btn-outline-secondary">Filtrar</button>
     </div>
 </form>
 
-<form method="post" class="col-12 col-md-8 col-lg-6">
+<form method="post" class="col-12 col-md-8 col-lg-6"
+      onsubmit="return confirm('Substituir o atleta neste combate?')">
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
     <div class="mb-3">
         <label class="form-label d-block">Canto a substituir *</label>

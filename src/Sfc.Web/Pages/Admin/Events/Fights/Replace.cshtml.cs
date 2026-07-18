@@ -8,7 +8,8 @@ using Sfc.Web.Services;
 
 namespace Sfc.Web.Pages.Admin.Events.Fights;
 
-public class ReplaceModel(EventService eventService, AthleteService athleteService) : PageModel
+public class ReplaceModel(EventService eventService, AthleteService athleteService,
+    ClubService clubService) : PageModel
 {
     [BindProperty]
     [Required(ErrorMessage = "Escolha o canto a substituir.")]
@@ -21,9 +22,16 @@ public class ReplaceModel(EventService eventService, AthleteService athleteServi
     [BindProperty(SupportsGet = true)]
     public string? FilterName { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public Guid? FilterClubId { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public Discipline? FilterDiscipline { get; set; }
+
     public Event? Event { get; private set; }
     public Fight? Fight { get; private set; }
     public List<SelectListItem> AthleteOptions { get; private set; } = [];
+    public List<SelectListItem> ClubOptions { get; private set; } = [];
 
     public async Task<IActionResult> OnGetAsync(Guid eventId, Guid fightId, CancellationToken ct)
     {
@@ -44,6 +52,10 @@ public class ReplaceModel(EventService eventService, AthleteService athleteServi
             case CardOperationResult.EventNotFound:
             case CardOperationResult.FightNotFound:
                 return NotFound();
+            case CardOperationResult.EventLocked:
+                ModelState.AddModelError(string.Empty,
+                    "O card de um evento concluído ou cancelado não pode ser alterado.");
+                return await ReloadAsync(eventId, fightId, ct);
             case CardOperationResult.FightNotScheduled:
                 ModelState.AddModelError(string.Empty,
                     "Só é possível substituir atletas em combates agendados.");
@@ -72,8 +84,11 @@ public class ReplaceModel(EventService eventService, AthleteService athleteServi
         if (Event is null || Fight is null)
             return false;
 
-        AthleteOptions = (await athleteService.ListActiveOptionsAsync(FilterName, null, null, ct))
+        AthleteOptions = (await athleteService.ListActiveOptionsAsync(FilterName, FilterClubId, FilterDiscipline, ct))
             .Select(o => new SelectListItem(o.Label, o.Id.ToString()))
+            .ToList();
+        ClubOptions = (await clubService.SearchAsync(null, ct))
+            .Select(c => new SelectListItem(c.Name, c.Id.ToString()))
             .ToList();
         return true;
     }
