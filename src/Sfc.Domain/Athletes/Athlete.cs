@@ -42,10 +42,17 @@ public class Athlete : IOrganizationScoped
     public int BaselineDraws { get; private set; }
     public int BaselineKos { get; private set; }
 
-    public int Wins => BaselineWins;
-    public int Losses => BaselineLosses;
-    public int Draws => BaselineDraws;
-    public int WinsByKo => BaselineKos;
+    // Aggregated from platform FightResults; mutated only via ApplyResultDelta
+    // (domain rule 3 — displayed record = baseline + aggregation).
+    public int ResultWins { get; private set; }
+    public int ResultLosses { get; private set; }
+    public int ResultDraws { get; private set; }
+    public int ResultKos { get; private set; }
+
+    public int Wins => BaselineWins + ResultWins;
+    public int Losses => BaselineLosses + ResultLosses;
+    public int Draws => BaselineDraws + ResultDraws;
+    public int WinsByKo => BaselineKos + ResultKos;
     public string RecordDisplay => $"{Wins}-{Losses}-{Draws}";
 
     public int Age
@@ -127,6 +134,22 @@ public class Athlete : IOrganizationScoped
             throw new ArgumentException("Slug must be in canonical form.", nameof(slug));
 
         Slug = slug;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void ApplyResultDelta(RecordDelta delta)
+    {
+        var wins = ResultWins + delta.Wins;
+        var losses = ResultLosses + delta.Losses;
+        var draws = ResultDraws + delta.Draws;
+        var kos = ResultKos + delta.Kos;
+        if (wins < 0 || losses < 0 || draws < 0 || kos < 0)
+            throw new InvalidOperationException("Result counters cannot go negative.");
+
+        ResultWins = wins;
+        ResultLosses = losses;
+        ResultDraws = draws;
+        ResultKos = kos;
         UpdatedAt = DateTime.UtcNow;
     }
 
