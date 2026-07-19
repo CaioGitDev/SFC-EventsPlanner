@@ -84,7 +84,39 @@ public class EditModel(EventService eventService) : PageModel
     public async Task<IActionResult> OnPostRemoveFightAsync(Guid id, Guid fightId, CancellationToken ct)
     {
         var result = await eventService.RemoveFightAsync(id, fightId, ct);
-        TempData["Success"] = result == CardOperationResult.Success ? "Combate removido." : null;
+        if (result == CardOperationResult.HasResult)
+            TempData["Error"] = "Este combate tem resultado — apague primeiro o resultado para reverter os records.";
+        else
+            TempData["Success"] = result == CardOperationResult.Success ? "Combate removido." : null;
+        return RedirectToPage(new { id });
+    }
+
+    public Task<IActionResult> OnPostCancelFightAsync(Guid id, Guid fightId, CancellationToken ct)
+        => FightStatusActionAsync(id, () => eventService.CancelFightAsync(id, fightId, ct), "Combate cancelado.");
+
+    public Task<IActionResult> OnPostNoContestFightAsync(Guid id, Guid fightId, CancellationToken ct)
+        => FightStatusActionAsync(id, () => eventService.MarkFightNoContestAsync(id, fightId, ct), "Combate marcado como no contest.");
+
+    public Task<IActionResult> OnPostReinstateFightAsync(Guid id, Guid fightId, CancellationToken ct)
+        => FightStatusActionAsync(id, () => eventService.ReinstateFightAsync(id, fightId, ct), "Combate reativado.");
+
+    private async Task<IActionResult> FightStatusActionAsync(Guid id,
+        Func<Task<ResultOperationResult>> action, string successMessage)
+    {
+        var result = await action();
+        switch (result)
+        {
+            case ResultOperationResult.EventNotFound:
+            case ResultOperationResult.FightNotFound:
+                return NotFound();
+            case ResultOperationResult.Success:
+                TempData["Success"] = successMessage;
+                break;
+            default:
+                TempData["Error"] = "Não foi possível alterar o estado do combate.";
+                break;
+        }
+
         return RedirectToPage(new { id });
     }
 
