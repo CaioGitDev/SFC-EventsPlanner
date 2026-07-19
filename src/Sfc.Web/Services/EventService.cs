@@ -18,6 +18,7 @@ public enum EventDeleteResult
     Deleted,
     NotFound,
     NotDeletable,
+    HasResults,
 }
 
 public enum EventTransitionResult
@@ -40,6 +41,21 @@ public enum CardOperationResult
     SameAthleteBothCorners,
     FightNotScheduled,
     EventLocked,
+    HasResult,
+}
+
+public record ResultInput(Guid? WinnerAthleteId, FightResultMethod Method, int? Round, string? Time);
+
+public enum ResultOperationResult
+{
+    Success,
+    EventNotFound,
+    FightNotFound,
+    EventCancelled,
+    EventNotYetHeld,
+    FightNotScheduled,
+    HasNoResult,
+    InvalidInput,
 }
 
 public class EventService(SfcDbContext db, IImageStorage imageStorage)
@@ -68,6 +84,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         => db.Events
             .Include(e => e.Fights.OrderBy(f => f.Order)).ThenInclude(f => f.RedCornerAthlete)
             .Include(e => e.Fights.OrderBy(f => f.Order)).ThenInclude(f => f.BlueCornerAthlete)
+            .Include(e => e.Fights.OrderBy(f => f.Order)).ThenInclude(f => f.Result)
             .SingleOrDefaultAsync(e => e.Id == id, ct);
 
     public async Task<Event> CreateAsync(EventInput input, Stream? banner, Stream? poster,
@@ -127,6 +144,11 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         if (evt.Status is not (EventStatus.Draft or EventStatus.Cancelled))
             return EventDeleteResult.NotDeletable;
 
+        // The cascade would silently drop results whose deltas are already applied
+        // to athlete records (domain rule 6) — results must be deleted first.
+        if (await db.Fights.AnyAsync(f => f.EventId == id && f.Result != null, ct))
+            return EventDeleteResult.HasResults;
+
         db.Events.Remove(evt);
         await db.SaveChangesAsync(ct);
 
@@ -171,9 +193,13 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         if (IsCardLocked(evt))
             return CardOperationResult.EventLocked;
 
-        if (!evt.RemoveFight(fightId))
+        var fight = evt.Fights.SingleOrDefault(f => f.Id == fightId);
+        if (fight is null)
             return CardOperationResult.FightNotFound;
+        if (fight.Result is not null)
+            return CardOperationResult.HasResult;
 
+        evt.RemoveFight(fightId);
         await db.SaveChangesAsync(ct);
         return CardOperationResult.Success;
     }
@@ -217,7 +243,146 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
     }
 
     private Task<Event?> GetTrackedWithFightsAsync(Guid id, CancellationToken ct)
-        => db.Events.Include(e => e.Fights).SingleOrDefaultAsync(e => e.Id == id, ct);
+        => db.Events.Include(e => e.Fights).ThenInclude(f => f.Result)
+            .SingleOrDefaultAsync(e => e.Id == id, ct);
+
+    /// <summary>
+    /// Records the fight's result, or corrects the existing one by reverting the old
+    /// deltas and applying the new ones. Record updates for both athletes happen in the
+    /// same SaveChanges (one transaction).
+    /// </summary>
+    public async Task<ResultOperationResult> SaveResultAsync(Guid eventId, Guid fightId,
+        ResultInput input, CancellationToken ct = default)
+    {
+        var (evt, fight, notFound) = await LoadFightAsync(eventId, fightId, ct);
+        if (notFound is not null)
+            return notFound.Value;
+
+        var athletes = await LoadCornerAthletesAsync(fight!, ct);
+        var red = athletes[fight!.RedCornerAthleteId];
+        var blue = athletes[fight.BlueCornerAthleteId];
+
+        try
+        {
+            if (fight.Result is null)
+            {
+                if (evt!.Status == EventStatus.Cancelled)
+                    return ResultOperationResult.EventCancelled;
+                if (DateOnly.FromDateTime(evt.Date) > TodayInPortugal())
+                    return ResultOperationResult.EventNotYetHeld;
+                if (fight.Status != FightStatus.Scheduled)
+                    return ResultOperationResult.FightNotScheduled;
+
+                var result = evt.RecordResult(fightId, input.WinnerAthleteId, input.Method,
+                    input.Round, input.Time, TodayInPortugal());
+                // Client-generated Guid key: attach explicitly so EF tracks it as Added.
+                db.FightResults.Add(result);
+                ApplyDeltas(result, fight, red, blue);
+            }
+            else
+            {
+                var oldDeltas = fight.Result.GetDeltas(fight.RedCornerAthleteId, fight.BlueCornerAthleteId);
+                var result = evt!.ChangeResult(fightId, input.WinnerAthleteId, input.Method,
+                    input.Round, input.Time);
+                red.ApplyResultDelta(oldDeltas.Red.Negate());
+                blue.ApplyResultDelta(oldDeltas.Blue.Negate());
+                ApplyDeltas(result, fight, red, blue);
+            }
+        }
+        catch (ArgumentException)
+        {
+            return ResultOperationResult.InvalidInput;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return ResultOperationResult.Success;
+    }
+
+    /// <summary>Reverts both athletes' deltas and removes the result; the fight returns to Scheduled.</summary>
+    public async Task<ResultOperationResult> DeleteResultAsync(Guid eventId, Guid fightId,
+        CancellationToken ct = default)
+    {
+        var (evt, fight, notFound) = await LoadFightAsync(eventId, fightId, ct);
+        if (notFound is not null)
+            return notFound.Value;
+        if (fight!.Result is null)
+            return ResultOperationResult.HasNoResult;
+
+        var athletes = await LoadCornerAthletesAsync(fight, ct);
+        var deltas = fight.Result.GetDeltas(fight.RedCornerAthleteId, fight.BlueCornerAthleteId);
+        athletes[fight.RedCornerAthleteId].ApplyResultDelta(deltas.Red.Negate());
+        athletes[fight.BlueCornerAthleteId].ApplyResultDelta(deltas.Blue.Negate());
+        evt!.DeleteResult(fightId);
+
+        await db.SaveChangesAsync(ct);
+        return ResultOperationResult.Success;
+    }
+
+    public Task<ResultOperationResult> CancelFightAsync(Guid eventId, Guid fightId,
+        CancellationToken ct = default)
+        => FightStatusOperationAsync(eventId, fightId, (evt, id) => evt.CancelFight(id), ct);
+
+    public Task<ResultOperationResult> MarkFightNoContestAsync(Guid eventId, Guid fightId,
+        CancellationToken ct = default)
+        => FightStatusOperationAsync(eventId, fightId, (evt, id) => evt.MarkFightNoContest(id), ct);
+
+    public Task<ResultOperationResult> ReinstateFightAsync(Guid eventId, Guid fightId,
+        CancellationToken ct = default)
+        => FightStatusOperationAsync(eventId, fightId, (evt, id) => evt.ReinstateFight(id), ct);
+
+    private async Task<ResultOperationResult> FightStatusOperationAsync(Guid eventId, Guid fightId,
+        Action<Event, Guid> operation, CancellationToken ct)
+    {
+        var (evt, _, notFound) = await LoadFightAsync(eventId, fightId, ct);
+        if (notFound is not null)
+            return notFound.Value;
+
+        try
+        {
+            operation(evt!, fightId);
+        }
+        catch (InvalidOperationException)
+        {
+            return ResultOperationResult.FightNotScheduled;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return ResultOperationResult.Success;
+    }
+
+    private async Task<(Event? Event, Fight? Fight, ResultOperationResult? NotFound)> LoadFightAsync(
+        Guid eventId, Guid fightId, CancellationToken ct)
+    {
+        var evt = await GetTrackedWithFightsAsync(eventId, ct);
+        if (evt is null)
+            return (null, null, ResultOperationResult.EventNotFound);
+
+        var fight = evt.Fights.SingleOrDefault(f => f.Id == fightId);
+        return fight is null
+            ? (evt, null, ResultOperationResult.FightNotFound)
+            : (evt, fight, null);
+    }
+
+    private async Task<Dictionary<Guid, Sfc.Domain.Athletes.Athlete>> LoadCornerAthletesAsync(
+        Fight fight, CancellationToken ct)
+    {
+        var ids = new[] { fight.RedCornerAthleteId, fight.BlueCornerAthleteId };
+        return await db.Athletes.Where(a => ids.Contains(a.Id)).ToDictionaryAsync(a => a.Id, ct);
+    }
+
+    private static void ApplyDeltas(FightResult result, Fight fight,
+        Sfc.Domain.Athletes.Athlete red, Sfc.Domain.Athletes.Athlete blue)
+    {
+        var deltas = result.GetDeltas(fight.RedCornerAthleteId, fight.BlueCornerAthleteId);
+        red.ApplyResultDelta(deltas.Red);
+        blue.ApplyResultDelta(deltas.Blue);
+    }
+
+    private static DateOnly TodayInPortugal()
+    {
+        var tz = TimeZoneInfo.FindSystemTimeZoneById("Europe/Lisbon");
+        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz));
+    }
 
     private static bool IsCardLocked(Event evt)
         => evt.Status is EventStatus.Completed or EventStatus.Cancelled;
