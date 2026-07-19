@@ -173,6 +173,27 @@ public class FightResultTests
     }
 
     [Fact]
+    public void RecordResult_TimeBeyondRoundDuration_Throws()
+    {
+        var evt = CreateEvent();
+        var fight = AddFight(evt, out var red, out _); // 3-minute rounds
+
+        Assert.Throws<ArgumentException>(() =>
+            evt.RecordResult(fight.Id, red, FightResultMethod.Ko, 2, "12:34", Today));
+    }
+
+    [Fact]
+    public void RecordResult_TimeAtExactRoundDuration_Succeeds()
+    {
+        var evt = CreateEvent();
+        var fight = AddFight(evt, out var red, out _); // 3-minute rounds
+
+        var result = evt.RecordResult(fight.Id, red, FightResultMethod.Ko, 3, "3:00", Today);
+
+        Assert.Equal("3:00", result.Time);
+    }
+
+    [Fact]
     public void RecordResult_KoWithRoundOnly_Succeeds()
     {
         var evt = CreateEvent();

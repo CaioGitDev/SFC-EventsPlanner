@@ -72,6 +72,67 @@ public class FightResultPersistenceTests(SfcWebApplicationFactory factory)
         Assert.Equal(2, loaded.Wins);
     }
 
+    [Fact]
+    public async Task Athlete_ConcurrentRecordUpdate_ThrowsConcurrencyException()
+    {
+        Guid athleteId;
+        using (var seedScope = factory.Services.CreateScope())
+        {
+            var seedDb = seedScope.ServiceProvider.GetRequiredService<SfcDbContext>();
+            var athlete = NewAthlete(seedDb, "concurrent-athlete");
+            seedDb.Athletes.Add(athlete);
+            await seedDb.SaveChangesAsync();
+            athleteId = athlete.Id;
+        }
+
+        using var scope1 = factory.Services.CreateScope();
+        using var scope2 = factory.Services.CreateScope();
+        var db1 = scope1.ServiceProvider.GetRequiredService<SfcDbContext>();
+        var db2 = scope2.ServiceProvider.GetRequiredService<SfcDbContext>();
+        var first = await db1.Athletes.SingleAsync(a => a.Id == athleteId);
+        var second = await db2.Athletes.SingleAsync(a => a.Id == athleteId);
+
+        first.ApplyResultDelta(new RecordDelta(1, 0, 0, 0));
+        await db1.SaveChangesAsync();
+
+        second.ApplyResultDelta(new RecordDelta(0, 0, 1, 0));
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => db2.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task FightResult_ConcurrentUpdate_ThrowsConcurrencyException()
+    {
+        Guid eventId;
+        Guid fightId;
+        using (var seedScope = factory.Services.CreateScope())
+        {
+            var seedDb = seedScope.ServiceProvider.GetRequiredService<SfcDbContext>();
+            var (evt, fight, red, _) = await SeedFightAsync(seedDb, "concurrent-result");
+            var result = evt.RecordResult(fight.Id, red.Id, FightResultMethod.UnanimousDecision,
+                null, null, Today);
+            seedDb.FightResults.Add(result);
+            await seedDb.SaveChangesAsync();
+            eventId = evt.Id;
+            fightId = fight.Id;
+        }
+
+        using var scope1 = factory.Services.CreateScope();
+        using var scope2 = factory.Services.CreateScope();
+        var db1 = scope1.ServiceProvider.GetRequiredService<SfcDbContext>();
+        var db2 = scope2.ServiceProvider.GetRequiredService<SfcDbContext>();
+        var evt1 = await db1.Events.Include(e => e.Fights).ThenInclude(f => f.Result)
+            .SingleAsync(e => e.Id == eventId);
+        var evt2 = await db2.Events.Include(e => e.Fights).ThenInclude(f => f.Result)
+            .SingleAsync(e => e.Id == eventId);
+        var winner = evt1.Fights[0].Result!.WinnerAthleteId!.Value;
+
+        evt1.ChangeResult(fightId, winner, FightResultMethod.Ko, 1, null);
+        await db1.SaveChangesAsync();
+
+        evt2.ChangeResult(fightId, winner, FightResultMethod.Tko, 2, null);
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => db2.SaveChangesAsync());
+    }
+
     private async Task<(Event Event, Fight Fight, Athlete Red, Athlete Blue)> SeedFightAsync(
         SfcDbContext db, string slugPrefix)
     {

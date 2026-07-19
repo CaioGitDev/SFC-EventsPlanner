@@ -92,7 +92,9 @@ else
                     <span>
                         <input type="radio" class="btn-check" asp-for="Method" value="@method" id="@id" autocomplete="off"
                                data-stoppage="@(stoppageMethods.Contains(method).ToString().ToLowerInvariant())" />
-                        <label class="btn btn-outline-dark" for="@id">@method.ToDisplay()</label>
+                        @* Forfeit is a walkover; mid-round retirements are TKO — label it to avoid live mix-ups. *@
+                        <label class="btn btn-outline-dark" for="@id">@(method == FightResultMethod.Forfeit
+                            ? "Desistência (walkover)" : method.ToDisplay())</label>
                     </span>
                 }
             </div>
@@ -146,3 +148,15 @@ else
         })();
     </script>
 }
+
+<script>
+    // Double-submit guard: weak venue wi-fi invites double taps, and a duplicate
+    // POST would trip the concurrency protection with a scary message.
+    document.querySelectorAll('main form').forEach(function (form) {
+        form.addEventListener('submit', function () {
+            setTimeout(function () {
+                form.querySelectorAll('button[type="submit"]').forEach(function (b) { b.disabled = true; });
+            }, 0);
+        });
+    });
+</script>

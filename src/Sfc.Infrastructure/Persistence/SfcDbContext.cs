@@ -59,6 +59,10 @@ public class SfcDbContext(DbContextOptions<SfcDbContext> options)
 
         builder.Entity<Athlete>(entity =>
         {
+            // Optimistic concurrency via PostgreSQL xmin (uint row version maps to the
+            // system column): result-recording flows (double-tap "Confirmar" on weak
+            // venue wi-fi) must not silently lose record updates.
+            entity.Property<uint>("Version").IsRowVersion();
             entity.Property(a => a.FirstName).HasMaxLength(100).IsRequired();
             entity.Property(a => a.LastName).HasMaxLength(100).IsRequired();
             entity.Property(a => a.Nickname).HasMaxLength(100);
@@ -121,6 +125,7 @@ public class SfcDbContext(DbContextOptions<SfcDbContext> options)
 
         builder.Entity<FightResult>(entity =>
         {
+            entity.Property<uint>("Version").IsRowVersion();
             entity.Property(r => r.Method).HasConversion<string>().HasMaxLength(30);
             entity.Property(r => r.Time).HasMaxLength(5);
             entity.HasIndex(r => r.FightId).IsUnique();

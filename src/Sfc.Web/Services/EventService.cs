@@ -56,6 +56,7 @@ public enum ResultOperationResult
     FightNotScheduled,
     HasNoResult,
     InvalidInput,
+    ConcurrencyConflict,
 }
 
 public class EventService(SfcDbContext db, IImageStorage imageStorage)
@@ -294,8 +295,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
             return ResultOperationResult.InvalidInput;
         }
 
-        await db.SaveChangesAsync(ct);
-        return ResultOperationResult.Success;
+        return await SaveResultChangesAsync(ct);
     }
 
     /// <summary>Reverts both athletes' deltas and removes the result; the fight returns to Scheduled.</summary>
@@ -314,8 +314,30 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         athletes[fight.BlueCornerAthleteId].ApplyResultDelta(deltas.Blue.Negate());
         evt!.DeleteResult(fightId);
 
-        await db.SaveChangesAsync(ct);
-        return ResultOperationResult.Success;
+        return await SaveResultChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Saves record-affecting changes, translating optimistic-concurrency failures
+    /// (xmin token on Athlete/FightResult, or a concurrent first-time insert hitting
+    /// the unique FightId index) into a friendly result instead of a raw 500 —
+    /// double-taps on weak venue wi-fi are the norm, not the exception.
+    /// </summary>
+    private async Task<ResultOperationResult> SaveResultChangesAsync(CancellationToken ct)
+    {
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return ResultOperationResult.Success;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return ResultOperationResult.ConcurrencyConflict;
+        }
+        catch (DbUpdateException)
+        {
+            return ResultOperationResult.ConcurrencyConflict;
+        }
     }
 
     public Task<ResultOperationResult> CancelFightAsync(Guid eventId, Guid fightId,
