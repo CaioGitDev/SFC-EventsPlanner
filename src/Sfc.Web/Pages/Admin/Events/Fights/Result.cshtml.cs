@@ -220,6 +220,8 @@ public class ResultModel(EventService eventService) : PageModel
         ResultOperationResult.FightNotScheduled => "Este combate não está agendado — reative-o primeiro.",
         ResultOperationResult.HasNoResult => "Este combate não tem resultado para apagar.",
         ResultOperationResult.InvalidInput => "Resultado inválido. Verifique o método, round e tempo.",
+        ResultOperationResult.ConcurrencyConflict =>
+            "O resultado foi alterado entretanto (ex.: submissão dupla). Verifique o estado atual antes de repetir.",
         _ => "Não foi possível gravar o resultado.",
     };
 

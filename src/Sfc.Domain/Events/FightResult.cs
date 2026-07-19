@@ -109,8 +109,17 @@ public partial class FightResult : IOrganizationScoped
         if (round is not null && (round < 1 || round > fight.Rounds))
             throw new ArgumentException("Round must be within the fight's rounds.", nameof(round));
 
-        if (!string.IsNullOrWhiteSpace(time) && !TimeFormat().IsMatch(time.Trim()))
-            throw new ArgumentException("Time must be in m:ss format.", nameof(time));
+        if (!string.IsNullOrWhiteSpace(time))
+        {
+            var trimmed = time.Trim();
+            if (!TimeFormat().IsMatch(trimmed))
+                throw new ArgumentException("Time must be in m:ss format.", nameof(time));
+
+            var parts = trimmed.Split(':');
+            var totalSeconds = int.Parse(parts[0]) * 60 + int.Parse(parts[1]);
+            if (totalSeconds > fight.RoundDurationMinutes * 60)
+                throw new ArgumentException("Time cannot exceed the round duration.", nameof(time));
+        }
     }
 
     private static string? NormalizeTime(string? time)
