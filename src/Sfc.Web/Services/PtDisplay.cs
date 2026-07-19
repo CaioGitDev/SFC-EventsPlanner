@@ -39,4 +39,50 @@ public static class PtDisplay
         FightBilling.Card => "Card",
         _ => billing.ToString(),
     };
+
+    public static string ToDisplay(this FightStatus status) => status switch
+    {
+        FightStatus.Scheduled => "Agendado",
+        FightStatus.Completed => "Concluído",
+        FightStatus.Cancelled => "Cancelado",
+        FightStatus.NoContest => "No contest",
+        _ => status.ToString(),
+    };
+
+    public static string ToDisplay(this FightResultMethod method) => method switch
+    {
+        FightResultMethod.Ko => "KO",
+        FightResultMethod.Tko => "TKO",
+        FightResultMethod.UnanimousDecision => "Decisão unânime",
+        FightResultMethod.SplitDecision => "Decisão dividida",
+        FightResultMethod.MajorityDecision => "Decisão por maioria",
+        FightResultMethod.Draw => "Empate",
+        FightResultMethod.NoContest => "No contest",
+        FightResultMethod.Disqualification => "Desqualificação",
+        FightResultMethod.Forfeit => "Desistência",
+        _ => method.ToString(),
+    };
+
+    /// <summary>Readable pt-PT result line, e.g. "Vitória de Ana Silva por KO — R2 1:34".</summary>
+    public static string? ResultSummary(this Fight fight)
+    {
+        var result = fight.Result;
+        if (result is null)
+            return null;
+        if (result.Method == FightResultMethod.Draw)
+            return "Empate";
+        if (result.Method == FightResultMethod.NoContest)
+            return "No contest";
+
+        var winner = result.WinnerAthleteId == fight.RedCornerAthleteId
+            ? fight.RedCornerAthlete
+            : fight.BlueCornerAthlete;
+        var name = winner is null ? "?" : $"{winner.FirstName} {winner.LastName}";
+        var summary = $"Vitória de {name} por {result.Method.ToDisplay()}";
+        if (result.Round is not null)
+            summary += $" — R{result.Round}";
+        if (result.Time is not null)
+            summary += $" {result.Time}";
+        return summary;
+    }
 }

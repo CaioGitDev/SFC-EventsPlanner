@@ -68,9 +68,9 @@ public class AthleteService(SfcDbContext db, IImageStorage imageStorage)
                 a.PhotoUrl,
                 ClubName = a.Club != null ? a.Club.Name : null,
                 a.Discipline,
-                a.BaselineWins,
-                a.BaselineLosses,
-                a.BaselineDraws,
+                Wins = a.BaselineWins + a.ResultWins,
+                Losses = a.BaselineLosses + a.ResultLosses,
+                Draws = a.BaselineDraws + a.ResultDraws,
                 a.IsActive,
             })
             .ToListAsync(ct);
@@ -78,7 +78,7 @@ public class AthleteService(SfcDbContext db, IImageStorage imageStorage)
         var items = rows
             .Select(r => new AthleteListItem(r.Id, $"{r.FirstName} {r.LastName}", r.Nickname,
                 r.PhotoUrl, r.ClubName, r.Discipline,
-                $"{r.BaselineWins}-{r.BaselineLosses}-{r.BaselineDraws}", r.IsActive))
+                $"{r.Wins}-{r.Losses}-{r.Draws}", r.IsActive))
             .ToList();
 
         return new AthleteSearchResult(items, total, page, PageSize);
@@ -176,9 +176,9 @@ public class AthleteService(SfcDbContext db, IImageStorage imageStorage)
                 a.LastName,
                 a.Nickname,
                 ClubName = a.Club != null ? a.Club.Name : null,
-                a.BaselineWins,
-                a.BaselineLosses,
-                a.BaselineDraws,
+                Wins = a.BaselineWins + a.ResultWins,
+                Losses = a.BaselineLosses + a.ResultLosses,
+                Draws = a.BaselineDraws + a.ResultDraws,
             })
             .ToListAsync(ct);
 
@@ -188,7 +188,7 @@ public class AthleteService(SfcDbContext db, IImageStorage imageStorage)
                 var nickname = r.Nickname is null ? "" : $" '{r.Nickname}'";
                 var club = r.ClubName is null ? "" : $" · {r.ClubName}";
                 var label = $"{r.LastName}, {r.FirstName}{nickname} — " +
-                    $"{r.BaselineWins}-{r.BaselineLosses}-{r.BaselineDraws}{club}";
+                    $"{r.Wins}-{r.Losses}-{r.Draws}{club}";
                 return new AthleteOption(r.Id, label);
             })
             .ToList();

@@ -247,6 +247,24 @@ public class EventResultServiceTests(SfcWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task AthleteListings_ShowRecordWithResultAggregation()
+    {
+        using var scope = factory.Services.CreateScope();
+        var athletes = scope.ServiceProvider.GetRequiredService<AthleteService>();
+        var fx = await SeedAsync(scope.ServiceProvider, "Listagem Agregada", redBaseline: (5, 1, 0, 2));
+        await fx.Events.SaveResultAsync(fx.EventId, fx.FightId,
+            new ResultInput(fx.Red.Id, FightResultMethod.Ko, 2, null));
+
+        var searched = await athletes.SearchAsync("Listagem Agregada Vermelho", null, null);
+        var listItem = Assert.Single(searched.Items);
+        Assert.Equal("6-1-0", listItem.Record);
+
+        var options = await athletes.ListActiveOptionsAsync("Listagem Agregada Vermelho", null, null);
+        var option = Assert.Single(options);
+        Assert.Contains("6-1-0", option.Label);
+    }
+
+    [Fact]
     public async Task ResultOperations_UnknownIds_ReturnNotFound()
     {
         using var scope = factory.Services.CreateScope();
