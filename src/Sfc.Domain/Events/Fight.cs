@@ -32,6 +32,29 @@ public class Fight : IOrganizationScoped
     public Athlete? BlueCornerAthlete { get; private set; }
     public FightStatus Status { get; private set; }
 
+    /// <summary>
+    /// Weight limit for weigh-in miss detection: the catchweight when agreed, otherwise
+    /// the first number parsed from the free-text weight class ("-72kg" → 72). Null when
+    /// unparseable — no miss detection then.
+    /// </summary>
+    public decimal? WeightLimitKg
+    {
+        get
+        {
+            if (CatchweightKg is not null)
+                return CatchweightKg;
+            if (WeightClass is null)
+                return null;
+
+            var match = System.Text.RegularExpressions.Regex.Match(
+                WeightClass, @"[0-9]+([.,][0-9]+)?");
+            return match.Success
+                ? decimal.Parse(match.Value.Replace(',', '.'),
+                    System.Globalization.CultureInfo.InvariantCulture)
+                : null;
+        }
+    }
+
     /// <summary>1:1 result; null while scheduled, cancelled, or no contest without a ruling.</summary>
     public FightResult? Result { get; private set; }
 
