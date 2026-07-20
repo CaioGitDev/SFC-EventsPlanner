@@ -55,10 +55,19 @@ export function ResultLine({ row }: { row: FightResultRow }) {
   return (
     <div className="rounded-xl border border-border/60 bg-card/50 p-4">
       <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <Badge variant={row.billing === "Main" ? "danger" : "muted"}>
+        <Badge
+          variant={
+            row.billing === "Main"
+              ? "danger"
+              : row.billing === "CoMain"
+                ? "accent"
+                : "muted"
+          }
+        >
           {billingLabel(row.billing)}
         </Badge>
         {row.isTitleFight && <Badge variant="title">Título</Badge>}
+        {row.isAmateur && <Badge variant="muted">Amador</Badge>}
         <span>
           {disciplineLabel(row.discipline)} ·{" "}
           {weightLabel(row.weightClass, row.catchweightKg)}

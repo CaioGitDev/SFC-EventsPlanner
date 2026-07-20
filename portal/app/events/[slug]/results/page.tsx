@@ -50,7 +50,8 @@ export default async function ResultsPage({
       <section className="mt-8">
         {results && results.length > 0 ? (
           <div className="grid gap-3">
-            {results.map((row) => (
+            {/* Main event / title first, mirroring the fight-card page. */}
+            {[...results].reverse().map((row) => (
               <ResultLine key={row.order} row={row} />
             ))}
           </div>

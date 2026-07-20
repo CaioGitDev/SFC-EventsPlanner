@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { lisbonEpochMs } from "@/lib/format";
 
 interface Remaining {
   days: number;
@@ -10,8 +11,6 @@ interface Remaining {
   done: boolean;
 }
 
-// The naive ISO is Lisbon wall-clock; interpreting it in the visitor's local time
-// (new Date) is correct for the Portuguese audience and fine as a cosmetic countdown.
 function remaining(targetMs: number): Remaining {
   const ms = Math.max(0, targetMs - Date.now());
   const total = Math.floor(ms / 1000);
@@ -25,19 +24,25 @@ function remaining(targetMs: number): Remaining {
 }
 
 export function Countdown({ targetIso }: { targetIso: string }) {
-  const target = new Date(targetIso).getTime();
-  const [mounted, setMounted] = useState(false);
-  const [time, setTime] = useState(() => remaining(target));
+  // Starts null so server and first client render match (no Date.now mismatch);
+  // the ticker fills it in from a callback, keeping setState out of the effect body.
+  const [time, setTime] = useState<Remaining | null>(null);
 
   useEffect(() => {
-    setMounted(true);
-    setTime(remaining(target));
-    const id = setInterval(() => setTime(remaining(target)), 1000);
-    return () => clearInterval(id);
-  }, [target]);
+    // Lisbon-based instant so the countdown agrees with the Lisbon "Ver em direto" gate
+    // for visitors in any timezone.
+    const target = lisbonEpochMs(targetIso);
+    const tick = () => setTime(remaining(target));
+    const raf = requestAnimationFrame(tick);
+    const id = setInterval(tick, 1000);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearInterval(id);
+    };
+  }, [targetIso]);
 
-  // Reserve height until mounted to avoid a hydration mismatch.
-  if (!mounted) return <div className="h-[72px]" aria-hidden />;
+  // Reserve height until the first client tick to avoid a hydration mismatch.
+  if (time === null) return <div className="h-[72px]" aria-hidden />;
 
   if (time.done) {
     return (

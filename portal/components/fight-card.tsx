@@ -7,7 +7,15 @@ export function FightCard({ fight }: { fight: FightCardEntry }) {
   return (
     <div className="rounded-xl border border-border/60 bg-card/50 p-4 sm:p-5">
       <div className="mb-4 flex flex-wrap items-center justify-center gap-2 text-xs">
-        <Badge variant={fight.billing === "Main" ? "danger" : "muted"}>
+        <Badge
+          variant={
+            fight.billing === "Main"
+              ? "danger"
+              : fight.billing === "CoMain"
+                ? "accent"
+                : "muted"
+          }
+        >
           {billingLabel(fight.billing)}
         </Badge>
         {fight.isTitleFight && <Badge variant="title">Título</Badge>}

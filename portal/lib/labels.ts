@@ -1,3 +1,4 @@
+import { formatKg } from "@/lib/format";
 import type {
   Billing,
   EventStatus,
@@ -80,12 +81,12 @@ export function fightStatusLabel(status: FightStatus): string {
   }
 }
 
-/** Weight class label: explicit class, or "XXkg (combinado)" for a catchweight. */
+/** Weight class label: explicit class, or "XX kg (peso combinado)" for a catchweight. */
 export function weightLabel(
   weightClass: string | null,
   catchweightKg: number | null,
 ): string {
   if (weightClass) return weightClass;
-  if (catchweightKg != null) return `${catchweightKg}kg (combinado)`;
+  if (catchweightKg != null) return `${formatKg(catchweightKg)} kg (peso combinado)`;
   return "—";
 }

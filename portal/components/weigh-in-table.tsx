@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Badge } from "@/components/badge";
+import { formatKg } from "@/lib/format";
 import { weightLabel } from "@/lib/labels";
 import type { WeighInRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -45,7 +46,9 @@ export function WeighInTable({ rows }: { rows: WeighInRow[] }) {
               </td>
               <td className="px-4 py-3 text-right">
                 <span className="font-mono">
-                  {row.officialWeightKg != null ? `${row.officialWeightKg} kg` : "—"}
+                  {row.officialWeightKg != null
+                    ? `${formatKg(row.officialWeightKg)} kg`
+                    : "—"}
                 </span>
                 {row.missedWeight && (
                   <Badge variant="danger" className="ml-2">

@@ -13,7 +13,10 @@ export default async function Home() {
 
   const latestPast = past[0];
   const latestResults = latestPast ? await getEventResults(latestPast.slug) : null;
-  const decidedResults = (latestResults ?? [])
+  // Reverse first: the API orders by Order ascending (opener → main event), and the
+  // homepage highlight should lead with the headline fights, not the preliminaries.
+  const decidedResults = [...(latestResults ?? [])]
+    .reverse()
     .filter((r) => r.result != null)
     .slice(0, 5);
 
