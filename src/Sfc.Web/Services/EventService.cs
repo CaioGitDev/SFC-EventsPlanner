@@ -82,7 +82,8 @@ public enum ResultOperationResult
     ConcurrencyConflict,
 }
 
-public class EventService(SfcDbContext db, IImageStorage imageStorage)
+public class EventService(SfcDbContext db, IImageStorage imageStorage,
+    PortalRevalidator portalRevalidator)
 {
     private const int BannerMaxDimension = 1920;
     private const int PosterMaxDimension = 1200;
@@ -144,17 +145,18 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
 
         await UploadImagesAsync(evt, banner, poster, ct);
         await db.SaveChangesAsync(ct);
+        await RevalidateIfPublicAsync(evt, "event-updated", ct);
         return evt;
     }
 
     public Task<EventTransitionResult> PublishAsync(Guid id, CancellationToken ct = default)
-        => TransitionAsync(id, e => e.Publish(), ct);
+        => TransitionAsync(id, e => e.Publish(), "event-published", ct);
 
     public Task<EventTransitionResult> UnpublishAsync(Guid id, CancellationToken ct = default)
-        => TransitionAsync(id, e => e.Unpublish(), ct);
+        => TransitionAsync(id, e => e.Unpublish(), "event-unpublished", ct);
 
     public Task<EventTransitionResult> CompleteAsync(Guid id, CancellationToken ct = default)
-        => TransitionAsync(id, e => e.Complete(), ct);
+        => TransitionAsync(id, e => e.Complete(), "event-completed", ct);
 
     public async Task<EventTransitionResult> CancelAsync(Guid id, CancellationToken ct = default)
     {
@@ -173,7 +175,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         if (await db.Fights.AnyAsync(f => f.EventId == id && f.Result != null, ct))
             return EventTransitionResult.HasResults;
 
-        return await TransitionAsync(id, e => e.Cancel(), ct);
+        return await TransitionAsync(id, e => e.Cancel(), "event-cancelled", ct);
     }
 
     public async Task<EventDeleteResult> DeleteAsync(Guid id, CancellationToken ct = default)
@@ -222,6 +224,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         // an existing (Modified) row instead of a new (Added) one, so it must be attached explicitly.
         db.Fights.Add(fight);
         await db.SaveChangesAsync(ct);
+        await RevalidateIfPublicAsync(evt, "card-changed", ct);
         return CardOperationResult.Success;
     }
 
@@ -242,6 +245,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
 
         evt.RemoveFight(fightId);
         await db.SaveChangesAsync(ct);
+        await RevalidateIfPublicAsync(evt, "card-changed", ct);
         return CardOperationResult.Success;
     }
 
@@ -258,6 +262,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
 
         evt.MoveFight(fightId, direction);
         await db.SaveChangesAsync(ct);
+        await RevalidateIfPublicAsync(evt, "card-changed", ct);
         return CardOperationResult.Success;
     }
 
@@ -291,6 +296,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
             db.WeighIns.Remove(staleWeighIn);
 
         await db.SaveChangesAsync(ct);
+        await RevalidateIfPublicAsync(evt, "card-changed", ct);
         return CardOperationResult.Success;
     }
 
@@ -346,7 +352,10 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
             return ResultOperationResult.InvalidInput;
         }
 
-        return await SaveResultChangesAsync(ct);
+        var saveOutcome = await SaveResultChangesAsync(ct);
+        if (saveOutcome == ResultOperationResult.Success)
+            await RevalidateIfPublicAsync(evt!, "result-changed", ct);
+        return saveOutcome;
     }
 
     /// <summary>Reverts both athletes' deltas and removes the result; the fight returns to Scheduled.</summary>
@@ -365,7 +374,10 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         athletes[fight.BlueCornerAthleteId].ApplyResultDelta(deltas.Blue.Negate());
         evt!.DeleteResult(fightId);
 
-        return await SaveResultChangesAsync(ct);
+        var saveOutcome = await SaveResultChangesAsync(ct);
+        if (saveOutcome == ResultOperationResult.Success)
+            await RevalidateIfPublicAsync(evt, "result-changed", ct);
+        return saveOutcome;
     }
 
     /// <summary>
@@ -420,6 +432,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         }
 
         await db.SaveChangesAsync(ct);
+        await RevalidateIfPublicAsync(evt!, "card-changed", ct);
         return ResultOperationResult.Success;
     }
 
@@ -521,6 +534,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
             return WeighInOperationResult.ConcurrencyConflict;
         }
 
+        await RevalidateIfPublicAsync(evt, "weigh-in-changed", ct);
         return WeighInOperationResult.Success;
     }
 
@@ -559,11 +573,21 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         return rows;
     }
 
+    /// <summary>
+    /// Card and event-detail changes only matter to the portal when the event is public.
+    /// Late replacements and fight cancellations are the NORM on event day
+    /// (sfc-contexto: "cards mudam sempre") — the ISR page must not show a stale card.
+    /// </summary>
+    private Task RevalidateIfPublicAsync(Event evt, string reason, CancellationToken ct)
+        => evt.Status == EventStatus.Draft
+            ? Task.CompletedTask
+            : portalRevalidator.TriggerAsync(reason, evt.Slug, ct);
+
     private static bool IsCardLocked(Event evt)
         => evt.Status is EventStatus.Completed or EventStatus.Cancelled;
 
     private async Task<EventTransitionResult> TransitionAsync(Guid id, Action<Event> transition,
-        CancellationToken ct)
+        string revalidationReason, CancellationToken ct)
     {
         var evt = await db.Events.SingleOrDefaultAsync(e => e.Id == id, ct);
         if (evt is null)
@@ -579,6 +603,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         }
 
         await db.SaveChangesAsync(ct);
+        await portalRevalidator.TriggerAsync(revalidationReason, evt.Slug, ct);
         return EventTransitionResult.Success;
     }
 
