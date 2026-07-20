@@ -82,7 +82,8 @@ public enum ResultOperationResult
     ConcurrencyConflict,
 }
 
-public class EventService(SfcDbContext db, IImageStorage imageStorage)
+public class EventService(SfcDbContext db, IImageStorage imageStorage,
+    PortalRevalidator portalRevalidator)
 {
     private const int BannerMaxDimension = 1920;
     private const int PosterMaxDimension = 1200;
@@ -148,13 +149,13 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
     }
 
     public Task<EventTransitionResult> PublishAsync(Guid id, CancellationToken ct = default)
-        => TransitionAsync(id, e => e.Publish(), ct);
+        => TransitionAsync(id, e => e.Publish(), "event-published", ct);
 
     public Task<EventTransitionResult> UnpublishAsync(Guid id, CancellationToken ct = default)
-        => TransitionAsync(id, e => e.Unpublish(), ct);
+        => TransitionAsync(id, e => e.Unpublish(), "event-unpublished", ct);
 
     public Task<EventTransitionResult> CompleteAsync(Guid id, CancellationToken ct = default)
-        => TransitionAsync(id, e => e.Complete(), ct);
+        => TransitionAsync(id, e => e.Complete(), "event-completed", ct);
 
     public async Task<EventTransitionResult> CancelAsync(Guid id, CancellationToken ct = default)
     {
@@ -173,7 +174,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         if (await db.Fights.AnyAsync(f => f.EventId == id && f.Result != null, ct))
             return EventTransitionResult.HasResults;
 
-        return await TransitionAsync(id, e => e.Cancel(), ct);
+        return await TransitionAsync(id, e => e.Cancel(), "event-cancelled", ct);
     }
 
     public async Task<EventDeleteResult> DeleteAsync(Guid id, CancellationToken ct = default)
@@ -346,7 +347,10 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
             return ResultOperationResult.InvalidInput;
         }
 
-        return await SaveResultChangesAsync(ct);
+        var saveOutcome = await SaveResultChangesAsync(ct);
+        if (saveOutcome == ResultOperationResult.Success)
+            await portalRevalidator.TriggerAsync("result-changed", evt!.Slug, ct);
+        return saveOutcome;
     }
 
     /// <summary>Reverts both athletes' deltas and removes the result; the fight returns to Scheduled.</summary>
@@ -365,7 +369,10 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         athletes[fight.BlueCornerAthleteId].ApplyResultDelta(deltas.Blue.Negate());
         evt!.DeleteResult(fightId);
 
-        return await SaveResultChangesAsync(ct);
+        var saveOutcome = await SaveResultChangesAsync(ct);
+        if (saveOutcome == ResultOperationResult.Success)
+            await portalRevalidator.TriggerAsync("result-changed", evt.Slug, ct);
+        return saveOutcome;
     }
 
     /// <summary>
@@ -521,6 +528,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
             return WeighInOperationResult.ConcurrencyConflict;
         }
 
+        await portalRevalidator.TriggerAsync("weigh-in-changed", evt.Slug, ct);
         return WeighInOperationResult.Success;
     }
 
@@ -563,7 +571,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         => evt.Status is EventStatus.Completed or EventStatus.Cancelled;
 
     private async Task<EventTransitionResult> TransitionAsync(Guid id, Action<Event> transition,
-        CancellationToken ct)
+        string revalidationReason, CancellationToken ct)
     {
         var evt = await db.Events.SingleOrDefaultAsync(e => e.Id == id, ct);
         if (evt is null)
@@ -579,6 +587,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         }
 
         await db.SaveChangesAsync(ct);
+        await portalRevalidator.TriggerAsync(revalidationReason, evt.Slug, ct);
         return EventTransitionResult.Success;
     }
 

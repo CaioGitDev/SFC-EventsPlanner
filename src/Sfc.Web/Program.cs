@@ -49,6 +49,9 @@ builder.Services.AddScoped<ClubService>();
 builder.Services.AddScoped<AthleteService>();
 builder.Services.AddScoped<EventService>();
 builder.Services.AddScoped<PublicContentService>();
+builder.Services.Configure<PortalOptions>(
+    builder.Configuration.GetSection(PortalOptions.SectionName));
+builder.Services.AddHttpClient<PortalRevalidator>();
 
 var app = builder.Build();
 
