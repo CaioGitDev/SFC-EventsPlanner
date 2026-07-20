@@ -166,6 +166,18 @@ else
                         {
                             <span class="badge text-bg-info">Amador</span>
                         }
+                        @if (fight.Status == FightStatus.Cancelled)
+                        {
+                            <span class="badge text-bg-danger">Cancelado</span>
+                        }
+                        else if (fight.Status == FightStatus.NoContest && fight.Result is null)
+                        {
+                            <span class="badge text-bg-secondary">No contest</span>
+                        }
+                        @if (fight.ResultSummary() is string summary)
+                        {
+                            <div class="small text-success-emphasis fw-semibold">@summary</div>
+                        }
                     </td>
                     <td class="d-none d-md-table-cell">@fight.Discipline.ToDisplay()</td>
                     <td class="d-none d-md-table-cell">@fight.Rounds×@(fight.RoundDurationMinutes)min</td>
@@ -181,6 +193,28 @@ else
                         })">@fight.Billing.ToDisplay()</span>
                     </td>
                     <td class="text-end text-nowrap">
+                        @if (fight.Status == FightStatus.Scheduled || fight.Result is not null)
+                        {
+                            <a asp-page="Fights/Result" asp-route-eventId="@evt.Id" asp-route-fightId="@fight.Id"
+                               class="btn btn-sm btn-success">Resultado</a>
+                        }
+                        @if (fight.Status == FightStatus.Scheduled)
+                        {
+                            <form method="post" asp-page-handler="NoContestFight" asp-route-fightId="@fight.Id"
+                                  class="d-inline" onsubmit="return confirm('Marcar este combate como no contest?')">
+                                <button type="submit" class="btn btn-sm btn-outline-secondary">No contest</button>
+                            </form>
+                            <form method="post" asp-page-handler="CancelFight" asp-route-fightId="@fight.Id"
+                                  class="d-inline" onsubmit="return confirm('Cancelar este combate?')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Cancelar</button>
+                            </form>
+                        }
+                        @if (fight.Result is null && fight.Status is FightStatus.Cancelled or FightStatus.NoContest)
+                        {
+                            <form method="post" asp-page-handler="ReinstateFight" asp-route-fightId="@fight.Id" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-success">Reativar</button>
+                            </form>
+                        }
                         @if (!cardLocked)
                         {
                             <form method="post" asp-page-handler="MoveUp" asp-route-fightId="@fight.Id" class="d-inline">

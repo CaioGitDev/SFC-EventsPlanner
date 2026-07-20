@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Sfc.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using Sfc.Infrastructure.Persistence;
 namespace Sfc.Infrastructure.Migrations
 {
     [DbContext(typeof(SfcDbContext))]
-    partial class SfcDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260718202433_AddFightResults")]
+    partial class AddFightResults
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -318,12 +321,6 @@ namespace Sfc.Infrastructure.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<uint>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
                     b.Property<string>("WeightClass")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
@@ -563,12 +560,6 @@ namespace Sfc.Infrastructure.Migrations
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<uint>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
 
                     b.Property<Guid?>("WinnerAthleteId")
                         .HasColumnType("uuid");

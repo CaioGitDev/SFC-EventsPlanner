@@ -189,6 +189,61 @@ public class Event : IOrganizationScoped
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// Records the result of a scheduled fight. Only once the event date has arrived
+    /// (domain rule 5) and never on a cancelled event. Result operations bypass
+    /// <see cref="EnsureCardEditable"/> — they are not card changes.
+    /// </summary>
+    public FightResult RecordResult(Guid fightId, Guid? winnerAthleteId,
+        FightResultMethod method, int? round, string? time, DateOnly today)
+    {
+        if (Status == EventStatus.Cancelled)
+            throw new InvalidOperationException("Results cannot be recorded on a cancelled event.");
+        if (DateOnly.FromDateTime(Date) > today)
+            throw new InvalidOperationException("Results can only be recorded once the event date has arrived.");
+
+        var fight = FindFight(fightId);
+        var result = fight.RecordResult(winnerAthleteId, method, round, time);
+        UpdatedAt = DateTime.UtcNow;
+        return result;
+    }
+
+    /// <summary>Corrects an existing result; the caller reverts the old deltas and applies the new ones.</summary>
+    public FightResult ChangeResult(Guid fightId, Guid? winnerAthleteId,
+        FightResultMethod method, int? round, string? time)
+    {
+        var fight = FindFight(fightId);
+        var result = fight.ChangeResult(winnerAthleteId, method, round, time);
+        UpdatedAt = DateTime.UtcNow;
+        return result;
+    }
+
+    /// <summary>Deletes the result; the fight returns to Scheduled (domain rule 6 — revert first).</summary>
+    public void DeleteResult(Guid fightId)
+    {
+        FindFight(fightId).DeleteResult();
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void CancelFight(Guid fightId)
+    {
+        FindFight(fightId).Cancel();
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void MarkFightNoContest(Guid fightId)
+    {
+        FindFight(fightId).MarkNoContest();
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Recovers a cancelled/no-contest fight without result back to Scheduled (event-day mis-taps).</summary>
+    public void ReinstateFight(Guid fightId)
+    {
+        FindFight(fightId).Reinstate();
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public bool HasAthlete(Guid athleteId)
         => _fights.Any(f => f.RedCornerAthleteId == athleteId || f.BlueCornerAthleteId == athleteId);
 

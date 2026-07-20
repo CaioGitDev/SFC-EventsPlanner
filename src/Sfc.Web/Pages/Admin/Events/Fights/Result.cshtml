@@ -1,0 +1,162 @@
+@* src/Sfc.Web/Pages/Admin/Events/Fights/Result.cshtml *@
+@page "{eventId:guid}/{fightId:guid}"
+@using Sfc.Domain.Events
+@using Sfc.Web.Services
+@model Sfc.Web.Pages.Admin.Events.Fights.ResultModel
+@{
+    ViewData["Title"] = "Resultado do combate";
+    var fight = Model.Fight!;
+    var red = fight.RedCornerAthlete;
+    var blue = fight.BlueCornerAthlete;
+    var redName = $"{red?.FirstName} {red?.LastName}";
+    var blueName = $"{blue?.FirstName} {blue?.LastName}";
+    var stoppageMethods = new[] { FightResultMethod.Ko, FightResultMethod.Tko, FightResultMethod.Disqualification };
+}
+<h1 class="h3 mb-1">Resultado do combate</h1>
+<p class="text-muted mb-3">
+    @Model.Event?.Name — combate @fight.Order:
+    <span class="text-danger">@redName</span> vs <span class="text-primary">@blueName</span>
+    (@fight.Rounds×@(fight.RoundDurationMinutes)min)
+</p>
+<div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+@if (fight.Result is not null && !Model.Confirming)
+{
+    <div class="alert alert-info d-flex justify-content-between align-items-center col-12 col-md-8">
+        <div>
+            <strong>Resultado atual:</strong> @fight.ResultSummary()
+            <div class="small text-muted">Corrigir substitui o efeito anterior nos records dos dois atletas.</div>
+        </div>
+        <form method="post" asp-page-handler="Delete"
+              onsubmit="return confirm('Apagar o resultado? Os records dos atletas são revertidos.')">
+            <button type="submit" class="btn btn-outline-danger btn-sm">Apagar resultado</button>
+        </form>
+    </div>
+}
+
+@if (Model.Confirming)
+{
+    <div class="card col-12 col-md-6">
+        <div class="card-body">
+            <h2 class="h5">Confirmar resultado</h2>
+            <p class="fs-5 mb-4">@Model.Summary</p>
+            <form method="post" asp-page-handler="Confirm" class="d-inline">
+                <input type="hidden" asp-for="Outcome" />
+                <input type="hidden" asp-for="Method" />
+                <input type="hidden" asp-for="Round" />
+                <input type="hidden" asp-for="Time" />
+                <button type="submit" class="btn btn-success btn-lg">Confirmar</button>
+            </form>
+            <form method="post" asp-page-handler="Review" class="d-inline">
+                <input type="hidden" asp-for="Outcome" />
+                <input type="hidden" asp-for="Method" />
+                <input type="hidden" asp-for="Round" />
+                <input type="hidden" asp-for="Time" />
+                <button type="submit" class="btn btn-link">Voltar</button>
+            </form>
+        </div>
+    </div>
+}
+else
+{
+    <form method="post" asp-page-handler="Review" class="col-12 col-md-8" id="result-form">
+        <fieldset class="mb-4">
+            <legend class="h5">Quem venceu?</legend>
+            <div class="row g-2">
+                <div class="col-6">
+                    <input type="radio" class="btn-check" asp-for="Outcome" value="Red" id="outcome-red" autocomplete="off" />
+                    <label class="btn btn-outline-danger w-100 py-3" for="outcome-red">@redName<br /><small>Canto vermelho</small></label>
+                </div>
+                <div class="col-6">
+                    <input type="radio" class="btn-check" asp-for="Outcome" value="Blue" id="outcome-blue" autocomplete="off" />
+                    <label class="btn btn-outline-primary w-100 py-3" for="outcome-blue">@blueName<br /><small>Canto azul</small></label>
+                </div>
+                <div class="col-6">
+                    <input type="radio" class="btn-check" asp-for="Outcome" value="Draw" id="outcome-draw" autocomplete="off" />
+                    <label class="btn btn-outline-secondary w-100 py-2" for="outcome-draw">Empate</label>
+                </div>
+                <div class="col-6">
+                    <input type="radio" class="btn-check" asp-for="Outcome" value="NoContest" id="outcome-nc" autocomplete="off" />
+                    <label class="btn btn-outline-secondary w-100 py-2" for="outcome-nc">No contest</label>
+                </div>
+            </div>
+            <span asp-validation-for="Outcome" class="text-danger"></span>
+        </fieldset>
+
+        <fieldset class="mb-4" id="method-section">
+            <legend class="h5">Método</legend>
+            <div class="d-flex flex-wrap gap-2">
+                @foreach (var method in Sfc.Web.Pages.Admin.Events.Fights.ResultModel.WinnerMethods)
+                {
+                    var id = $"method-{method}";
+                    <span>
+                        <input type="radio" class="btn-check" asp-for="Method" value="@method" id="@id" autocomplete="off"
+                               data-stoppage="@(stoppageMethods.Contains(method).ToString().ToLowerInvariant())" />
+                        @* Forfeit is a walkover; mid-round retirements are TKO — label it to avoid live mix-ups. *@
+                        <label class="btn btn-outline-dark" for="@id">@(method == FightResultMethod.Forfeit
+                            ? "Desistência (walkover)" : method.ToDisplay())</label>
+                    </span>
+                }
+            </div>
+            <span asp-validation-for="Method" class="text-danger"></span>
+        </fieldset>
+
+        <fieldset class="mb-4" id="roundtime-section">
+            <legend class="h5">Round e tempo</legend>
+            <div class="row g-2 col-md-8">
+                <div class="col-6">
+                    <label asp-for="Round" class="form-label">Round</label>
+                    <select asp-for="Round" class="form-select form-select-lg">
+                        <option value="">—</option>
+                        @for (var r = 1; r <= fight.Rounds; r++)
+                        {
+                            <option value="@r">@r</option>
+                        }
+                    </select>
+                    <span asp-validation-for="Round" class="text-danger"></span>
+                </div>
+                <div class="col-6">
+                    <label asp-for="Time" class="form-label">Tempo (m:ss)</label>
+                    <input asp-for="Time" class="form-control form-control-lg" inputmode="numeric" placeholder="1:34" />
+                    <span asp-validation-for="Time" class="text-danger"></span>
+                </div>
+            </div>
+        </fieldset>
+
+        <button type="submit" class="btn btn-primary btn-lg">Rever resultado</button>
+        <a asp-page="/Admin/Events/Edit" asp-route-id="@Model.Event!.Id" class="btn btn-link">Voltar ao evento</a>
+    </form>
+
+    <script>
+        (function () {
+            const form = document.getElementById('result-form');
+            const methodSection = document.getElementById('method-section');
+            const roundTimeSection = document.getElementById('roundtime-section');
+
+            function refresh() {
+                const outcome = form.querySelector('input[name="Outcome"]:checked')?.value;
+                const winnerOutcome = outcome === 'Red' || outcome === 'Blue';
+                methodSection.hidden = !winnerOutcome;
+
+                const method = form.querySelector('input[name="Method"]:checked');
+                const stoppage = winnerOutcome && method?.dataset.stoppage === 'true';
+                roundTimeSection.hidden = !stoppage;
+            }
+
+            form.addEventListener('change', refresh);
+            refresh();
+        })();
+    </script>
+}
+
+<script>
+    // Double-submit guard: weak venue wi-fi invites double taps, and a duplicate
+    // POST would trip the concurrency protection with a scary message.
+    document.querySelectorAll('main form').forEach(function (form) {
+        form.addEventListener('submit', function () {
+            setTimeout(function () {
+                form.querySelectorAll('button[type="submit"]').forEach(function (b) { b.disabled = true; });
+            }, 0);
+        });
+    });
+</script>
