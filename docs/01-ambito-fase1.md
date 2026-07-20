@@ -11,7 +11,7 @@ Nada fora da lista "DENTRO" é implementado sem o Caio atualizar este documento.
 2. **Clubes** — CRUD: nome, logo, cidade, país, contactos, treinadores, lista de atletas
 3. **Eventos** — CRUD: nome, descrição, data, local, banner, poster, estado (rascunho/publicado/concluído/cancelado), link externo de bilhetes, link de streaming (YouTube embed)
 4. **Fight card** — combates por evento: ordem, main/co-main, disciplina, rounds, categoria de peso, título (s/n), amador/profissional, red corner, blue corner
-5. **Resultados** — vencedor, método (KO/TKO/Decision/Split/Draw/NC), round, tempo; **atualiza automaticamente o record do atleta**
+5. **Resultados** — vencedor, método (KO/TKO/Decisão unânime/dividida/maioria, Draw, NC, DQ, Desistência), round, tempo; **atualiza automaticamente o record do atleta**; corrigir/apagar reverte o efeito; combates podem ser marcados Cancelado/No Contest sem resultado e reativados enquanto não tiverem resultado (recuperação de toque errado no dia do evento)
 6. **Pesagem simples** — por atleta do card: peso esperado, peso oficial, aprovado (s/n), observações
 7. **Utilizadores/roles mínimos** — Administrador e Editor. Mais nada.
 

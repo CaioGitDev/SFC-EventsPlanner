@@ -1,0 +1,6 @@
+# ADR-007 — Cartel único por atleta na Fase 1
+
+- **Estado:** Aceite (2026-07-20)
+- **Contexto:** Na prática dos desportos de combate, os cartéis amador e profissional são geridos em separado — a estreia profissional normalmente começa em 0-0-0, independentemente do histórico amador. O modelo da Fase 1 (`docs/02-modelo-dominio.md`) define um único record por atleta (baseline + agregação de resultados na plataforma) e `Fight.IsAmateur` não segrega contadores. O revisor-dominio sinalizou o risco de contaminação do cartel quando um amador passa a profissional no mesmo perfil.
+- **Decisão:** A Fase 1 mantém **um cartel único por atleta**. Combates amadores e profissionais somam ao mesmo record. `Fight.IsAmateur` continua a existir apenas como característica do combate (formato, proteções, apresentação no card).
+- **Consequências:** Simplicidade máxima (YAGNI) e leituras baratas. Se um atleta transitar de amador para profissional e o SFC quiser cartel profissional separado, a mitigação operacional na Fase 1 é criar um novo perfil para a fase profissional (baseline 0-0-0). Separar cartéis a sério (contadores amador/pro distintos + migração de dados + apresentação dupla no portal) exige novo ADR — revisitar quando o SFC tiver o primeiro caso real de transição.
