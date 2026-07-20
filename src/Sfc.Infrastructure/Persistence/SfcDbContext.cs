@@ -25,6 +25,7 @@ public class SfcDbContext(DbContextOptions<SfcDbContext> options)
     public DbSet<Event> Events => Set<Event>();
     public DbSet<Fight> Fights => Set<Fight>();
     public DbSet<FightResult> FightResults => Set<FightResult>();
+    public DbSet<WeighIn> WeighIns => Set<WeighIn>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -134,6 +135,20 @@ public class SfcDbContext(DbContextOptions<SfcDbContext> options)
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<Athlete>().WithMany()
                 .HasForeignKey(r => r.WinnerAthleteId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<WeighIn>(entity =>
+        {
+            entity.Property(w => w.ExpectedWeightKg).HasPrecision(5, 2);
+            entity.Property(w => w.OfficialWeightKg).HasPrecision(5, 2);
+            entity.Property(w => w.Notes).HasMaxLength(1000);
+            entity.HasIndex(w => new { w.FightId, w.AthleteId }).IsUnique();
+            entity.HasOne<Fight>().WithMany()
+                .HasForeignKey(w => w.FightId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<Athlete>().WithMany()
+                .HasForeignKey(w => w.AthleteId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
