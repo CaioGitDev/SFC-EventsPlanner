@@ -37,8 +37,10 @@ public class WeighIn : IOrganizationScoped
             throw new ArgumentException("Fight is required.", nameof(fightId));
         if (athleteId == Guid.Empty)
             throw new ArgumentException("Athlete is required.", nameof(athleteId));
-        if (expectedWeightKg is <= 0)
-            throw new ArgumentException("Expected weight must be positive.", nameof(expectedWeightKg));
+        if (expectedWeightKg is < MinPlausibleKg or > MaxPlausibleKg)
+            throw new ArgumentException(
+                $"Expected weight must be between {MinPlausibleKg} and {MaxPlausibleKg} kg.",
+                nameof(expectedWeightKg));
 
         Id = Guid.NewGuid();
         OrganizationId = organizationId;
@@ -82,8 +84,10 @@ public class WeighIn : IOrganizationScoped
 
     public void SetExpectedWeight(decimal? expectedWeightKg)
     {
-        if (expectedWeightKg is <= 0)
-            throw new ArgumentException("Expected weight must be positive.", nameof(expectedWeightKg));
+        if (expectedWeightKg is < MinPlausibleKg or > MaxPlausibleKg)
+            throw new ArgumentException(
+                $"Expected weight must be between {MinPlausibleKg} and {MaxPlausibleKg} kg.",
+                nameof(expectedWeightKg));
 
         ExpectedWeightKg = expectedWeightKg;
         UpdatedAt = DateTime.UtcNow;

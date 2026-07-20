@@ -56,6 +56,15 @@ public class WeighInTests
 
     [Theory]
     [InlineData(19.9)]
+    [InlineData(9999)]
+    public void SetExpectedWeight_OutsidePlausibleRange_Throws(double kg)
+    {
+        Assert.Throws<ArgumentException>(() =>
+            CreateWeighIn().SetExpectedWeight((decimal)kg));
+    }
+
+    [Theory]
+    [InlineData(19.9)]
     [InlineData(251)]
     public void RecordOfficialWeight_OutsidePlausibleRange_Throws(double kg)
     {
