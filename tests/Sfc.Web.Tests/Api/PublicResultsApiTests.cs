@@ -50,6 +50,10 @@ public class PublicResultsApiTests(SfcWebApplicationFactory factory)
             $"/api/public/events/{s.EventSlug}/results", Json);
 
         var row = rows[0];
+        // The results page must stand alone — fight context comes with the row.
+        Assert.Equal("-72kg", row.GetProperty("weightClass").GetString());
+        Assert.Equal("MuayThai", row.GetProperty("discipline").GetString());
+        Assert.False(row.GetProperty("isTitleFight").GetBoolean());
         var result = row.GetProperty("result");
         Assert.Equal("blue", result.GetProperty("winnerCorner").GetString());
         Assert.Equal("Tko", result.GetProperty("method").GetString());

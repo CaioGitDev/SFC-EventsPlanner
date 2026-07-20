@@ -43,10 +43,15 @@ public record PublicCardAthlete(string Name, string? Nickname, string? Slug, str
     }
 }
 
+// Enum-name fields (method, status, billing, discipline) are deliberately raw English
+// codes: the portal maps them to pt-PT labels, icons, and colors. Only
+// PublicFighterFightRow.Summary ships pre-built pt-PT text — it is a sentence,
+// not a code. Do not "fix" one to match the other.
 public record PublicResultInfo(string? WinnerCorner, string Method, int? Round, string? Time);
 
-public record PublicFightResultRow(int Order, string Billing, PublicCardAthlete Red,
-    PublicCardAthlete Blue, string Status, PublicResultInfo? Result);
+public record PublicFightResultRow(int Order, string Billing, string Discipline,
+    string? WeightClass, decimal? CatchweightKg, bool IsTitleFight, bool IsAmateur,
+    PublicCardAthlete Red, PublicCardAthlete Blue, string Status, PublicResultInfo? Result);
 
 public record PublicWeighInRow(int Order, string AthleteName, string? AthleteSlug, string Corner,
     string? WeightClass, decimal? CatchweightKg, decimal? OfficialWeightKg, DateTime? WeighedAt,
@@ -157,7 +162,8 @@ public class PublicContentService(SfcDbContext db)
             return null;
 
         return evt.Fights.Select(fight => new PublicFightResultRow(
-                fight.Order, fight.Billing.ToString(),
+                fight.Order, fight.Billing.ToString(), fight.Discipline.ToString(),
+                fight.WeightClass, fight.CatchweightKg, fight.IsTitleFight, fight.IsAmateur,
                 PublicCardAthlete.From(fight.RedCornerAthlete),
                 PublicCardAthlete.From(fight.BlueCornerAthlete),
                 fight.Status.ToString(),

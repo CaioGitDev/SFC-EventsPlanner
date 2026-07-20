@@ -101,6 +101,73 @@ public class PortalRevalidationWiringTests(SfcWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task CardChangesOnPublicEvent_TriggerRevalidation_ButDraftDoesNot()
+    {
+        var handler = new RecordingHandler();
+        using var wired = factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting("Portal:RevalidateUrl", "http://portal.test/api/revalidate");
+            builder.ConfigureTestServices(services =>
+                services.AddHttpClient<PortalRevalidator>()
+                    .ConfigurePrimaryHttpMessageHandler(() => handler));
+        });
+
+        using var scope = wired.Services.CreateScope();
+        var events = scope.ServiceProvider.GetRequiredService<EventService>();
+        var athletes = scope.ServiceProvider.GetRequiredService<AthleteService>();
+        var red = await athletes.CreateAsync(new AthleteInput("Card", "Revalida", null,
+            new DateOnly(2000, 1, 1), "Portugal", Discipline.MuayThai, AthleteStatus.Professional,
+            null, null, null, null, null, false, null, null), (0, 0, 0, 0), null);
+        var blue = await athletes.CreateAsync(new AthleteInput("Card", "RevalidaDois", null,
+            new DateOnly(2000, 1, 1), "Portugal", Discipline.MuayThai, AthleteStatus.Professional,
+            null, null, null, null, null, false, null, null), (0, 0, 0, 0), null);
+        var evt = await events.CreateAsync(new EventInput("Revalidação Card", null,
+            DateTime.Today.AddDays(70).AddHours(20), null, null, null, null, null), null, null);
+
+        // Draft: card changes are not public — no revalidation.
+        await events.AddFightAsync(evt.Id, new FightInput(red.Id, blue.Id,
+            Discipline.MuayThai, 3, 3, "-72kg", null, false, false));
+        Assert.DoesNotContain(handler.Calls, c => c.Body.Contains("card-changed"));
+
+        await events.PublishAsync(evt.Id);
+        var fightId = (await events.GetWithCardAsync(evt.Id))!.Fights[0].Id;
+        handler.Calls.Clear();
+
+        // Published: cancelling a fight is public content changing.
+        await events.CancelFightAsync(evt.Id, fightId);
+        Assert.Contains(handler.Calls,
+            c => c.Body.Contains("card-changed") && c.Body.Contains(evt.Slug));
+    }
+
+    [Fact]
+    public async Task UpdatingAPublishedEvent_TriggersRevalidation()
+    {
+        var handler = new RecordingHandler();
+        using var wired = factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting("Portal:RevalidateUrl", "http://portal.test/api/revalidate");
+            builder.ConfigureTestServices(services =>
+                services.AddHttpClient<PortalRevalidator>()
+                    .ConfigurePrimaryHttpMessageHandler(() => handler));
+        });
+
+        using var scope = wired.Services.CreateScope();
+        var events = scope.ServiceProvider.GetRequiredService<EventService>();
+        var evt = await events.CreateAsync(new EventInput("Revalidação Update", null,
+            DateTime.Today.AddDays(80).AddHours(20), null, null, null, null, null), null, null);
+        await events.PublishAsync(evt.Id);
+        handler.Calls.Clear();
+
+        // Adding the stream link on event day must reach the portal's home CTA.
+        await events.UpdateAsync(evt.Id, new EventInput("Revalidação Update", null,
+            DateTime.Today.AddDays(80).AddHours(20), null, null, null,
+            "https://youtube.com/watch?v=live", evt.Slug), null, null);
+
+        Assert.Contains(handler.Calls,
+            c => c.Body.Contains("event-updated") && c.Body.Contains(evt.Slug));
+    }
+
+    [Fact]
     public async Task SavingAResult_TriggersPortalRevalidation()
     {
         var handler = new RecordingHandler();

@@ -145,6 +145,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage,
 
         await UploadImagesAsync(evt, banner, poster, ct);
         await db.SaveChangesAsync(ct);
+        await RevalidateIfPublicAsync(evt, "event-updated", ct);
         return evt;
     }
 
@@ -223,6 +224,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage,
         // an existing (Modified) row instead of a new (Added) one, so it must be attached explicitly.
         db.Fights.Add(fight);
         await db.SaveChangesAsync(ct);
+        await RevalidateIfPublicAsync(evt, "card-changed", ct);
         return CardOperationResult.Success;
     }
 
@@ -243,6 +245,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage,
 
         evt.RemoveFight(fightId);
         await db.SaveChangesAsync(ct);
+        await RevalidateIfPublicAsync(evt, "card-changed", ct);
         return CardOperationResult.Success;
     }
 
@@ -259,6 +262,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage,
 
         evt.MoveFight(fightId, direction);
         await db.SaveChangesAsync(ct);
+        await RevalidateIfPublicAsync(evt, "card-changed", ct);
         return CardOperationResult.Success;
     }
 
@@ -292,6 +296,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage,
             db.WeighIns.Remove(staleWeighIn);
 
         await db.SaveChangesAsync(ct);
+        await RevalidateIfPublicAsync(evt, "card-changed", ct);
         return CardOperationResult.Success;
     }
 
@@ -427,6 +432,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage,
         }
 
         await db.SaveChangesAsync(ct);
+        await RevalidateIfPublicAsync(evt!, "card-changed", ct);
         return ResultOperationResult.Success;
     }
 
@@ -566,6 +572,16 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage,
 
         return rows;
     }
+
+    /// <summary>
+    /// Card and event-detail changes only matter to the portal when the event is public.
+    /// Late replacements and fight cancellations are the NORM on event day
+    /// (sfc-contexto: "cards mudam sempre") — the ISR page must not show a stale card.
+    /// </summary>
+    private Task RevalidateIfPublicAsync(Event evt, string reason, CancellationToken ct)
+        => evt.Status == EventStatus.Draft
+            ? Task.CompletedTask
+            : portalRevalidator.TriggerAsync(reason, evt.Slug, ct);
 
     private static bool IsCardLocked(Event evt)
         => evt.Status is EventStatus.Completed or EventStatus.Cancelled;
