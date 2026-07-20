@@ -44,6 +44,26 @@ public class WeighInTests
         Assert.Null(CreateFight("Peso Galo").WeightLimitKg);
     }
 
+    [Theory]
+    [InlineData("+90kg")]
+    [InlineData(" +100")]
+    public void WeightLimitKg_OpenHeavyweightClass_IsNull(string weightClass)
+    {
+        // "+90kg" is a floor, not a ceiling — flagging a 95kg heavyweight as a
+        // weight miss would poison the whole category with false badges.
+        Assert.Null(CreateFight(weightClass).WeightLimitKg);
+    }
+
+    [Theory]
+    [InlineData(19.9)]
+    [InlineData(251)]
+    public void RecordOfficialWeight_OutsidePlausibleRange_Throws(double kg)
+    {
+        // Fat-finger guard: "710" instead of "71,0" must not be stored as valid.
+        Assert.Throws<ArgumentException>(() =>
+            CreateWeighIn().RecordOfficialWeight((decimal)kg, DateTime.UtcNow));
+    }
+
     // --- WeighIn ---
 
     [Fact]

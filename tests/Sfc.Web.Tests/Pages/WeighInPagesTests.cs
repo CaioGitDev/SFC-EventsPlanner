@@ -75,6 +75,6 @@ public class WeighInPagesTests(SfcWebApplicationFactory factory)
 
         var html = await client.GetStringAsync($"/Admin/Events/WeighIns/{eventId}");
 
-        Assert.Contains("Falhou o peso", html);
+        Assert.Contains("fez peso", html); // "Não fez peso" badge (ASCII-safe fragment)
     }
 }

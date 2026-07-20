@@ -59,14 +59,15 @@ public enum WeighInOperationResult
     EventCancelled,
     ApprovalRequiresWeight,
     InvalidInput,
+    ConcurrencyConflict,
 }
 
 /// <summary>One row per card athlete on the weigh-in view; the future public portal's
 /// weight results will consume the same shape (prompt 05).</summary>
-public record WeighInRow(Guid FightId, int FightOrder, Guid AthleteId, string AthleteName,
-    Corner Corner, string? WeightClass, decimal? CatchweightKg, decimal? WeightLimitKg,
-    decimal? ExpectedWeightKg, decimal? OfficialWeightKg, DateTime? WeighedAt,
-    bool IsApproved, bool IsOverweight, string? Notes);
+public record WeighInRow(Guid FightId, int FightOrder, FightStatus FightStatus, Guid AthleteId,
+    string AthleteName, Corner Corner, string? WeightClass, decimal? CatchweightKg,
+    decimal? WeightLimitKg, decimal? ExpectedWeightKg, decimal? OfficialWeightKg,
+    DateTime? WeighedAt, bool IsApproved, bool IsOverweight, string? Notes);
 
 public enum ResultOperationResult
 {
@@ -450,11 +451,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         blue.ApplyResultDelta(deltas.Blue);
     }
 
-    private static DateOnly TodayInPortugal()
-    {
-        var tz = TimeZoneInfo.FindSystemTimeZoneById("Europe/Lisbon");
-        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz));
-    }
+    private static DateOnly TodayInPortugal() => PortugalTime.Today;
 
     /// <summary>Upserts the athlete's weigh-in for the fight (the view is a quick-entry
     /// grid, not a CRUD). A weight miss never blocks — the call is human.</summary>
@@ -513,7 +510,17 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
             return WeighInOperationResult.ApprovalRequiresWeight;
         }
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Concurrent first insert for the same athlete hits the unique
+            // (FightId, AthleteId) index — double taps on weak venue wi-fi.
+            return WeighInOperationResult.ConcurrencyConflict;
+        }
+
         return WeighInOperationResult.Success;
     }
 
@@ -539,7 +546,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
                 var athleteId = corner == Corner.Red ? fight.RedCornerAthleteId : fight.BlueCornerAthleteId;
                 var weighIn = weighIns.SingleOrDefault(
                     w => w.FightId == fight.Id && w.AthleteId == athleteId);
-                rows.Add(new WeighInRow(fight.Id, fight.Order, athleteId,
+                rows.Add(new WeighInRow(fight.Id, fight.Order, fight.Status, athleteId,
                     athlete is null ? "?" : $"{athlete.FirstName} {athlete.LastName}",
                     corner, fight.WeightClass, fight.CatchweightKg, fight.WeightLimitKg,
                     weighIn?.ExpectedWeightKg, weighIn?.OfficialWeightKg, weighIn?.WeighedAt,

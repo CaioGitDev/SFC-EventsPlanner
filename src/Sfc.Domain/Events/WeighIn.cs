@@ -49,10 +49,16 @@ public class WeighIn : IOrganizationScoped
         UpdatedAt = CreatedAt;
     }
 
+    /// <summary>Fat-finger guard ("710" for "71,0"); generous enough for kids and heavyweights.</summary>
+    private const decimal MinPlausibleKg = 20m;
+    private const decimal MaxPlausibleKg = 250m;
+
     public void RecordOfficialWeight(decimal officialWeightKg, DateTime weighedAtUtc)
     {
-        if (officialWeightKg <= 0)
-            throw new ArgumentException("Official weight must be positive.", nameof(officialWeightKg));
+        if (officialWeightKg is < MinPlausibleKg or > MaxPlausibleKg)
+            throw new ArgumentException(
+                $"Official weight must be between {MinPlausibleKg} and {MaxPlausibleKg} kg.",
+                nameof(officialWeightKg));
 
         OfficialWeightKg = officialWeightKg;
         WeighedAt = weighedAtUtc;

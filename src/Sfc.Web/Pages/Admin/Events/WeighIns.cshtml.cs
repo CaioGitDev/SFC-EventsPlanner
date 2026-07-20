@@ -90,7 +90,9 @@ public class WeighInsModel(EventService eventService) : PageModel
         WeighInOperationResult.AthleteNotInFight => "O atleta já não pertence a este combate — atualize a página.",
         WeighInOperationResult.EventCancelled => "Não é possível registar pesagens num evento cancelado.",
         WeighInOperationResult.ApprovalRequiresWeight => "Introduza o peso oficial antes de aprovar a pesagem.",
-        WeighInOperationResult.InvalidInput => "Pesagem inválida. Verifique os pesos introduzidos.",
+        WeighInOperationResult.InvalidInput => "Pesagem inválida. Verifique os pesos introduzidos (20–250 kg).",
+        WeighInOperationResult.ConcurrencyConflict =>
+            "A pesagem foi gravada em duplicado (ex.: duplo toque) — atualize a página e verifique o valor.",
         _ => "Não foi possível gravar a pesagem.",
     };
 }

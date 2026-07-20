@@ -36,11 +36,19 @@
                       asp-route-athleteId="@row.AthleteId"
                       class="row g-2 align-items-center border-bottom py-2 mx-0">
                     <div class="col-12 col-md-3">
-                        <span class="badge @(row.Corner == Sfc.Domain.Events.Corner.Red ? "text-bg-danger" : "text-bg-primary")">&nbsp;</span>
+                        <span class="badge @(row.Corner == Sfc.Domain.Events.Corner.Red ? "text-bg-danger" : "text-bg-primary")">@(row.Corner == Sfc.Domain.Events.Corner.Red ? "Vermelho" : "Azul")</span>
                         <strong>@row.AthleteName</strong>
+                        @if (row.FightStatus == Sfc.Domain.Events.FightStatus.Cancelled)
+                        {
+                            <span class="badge text-bg-danger">Combate cancelado</span>
+                        }
+                        else if (row.FightStatus == Sfc.Domain.Events.FightStatus.NoContest)
+                        {
+                            <span class="badge text-bg-secondary">No contest</span>
+                        }
                         @if (row.IsOverweight)
                         {
-                            <span class="badge text-bg-danger">Falhou o peso</span>
+                            <span class="badge text-bg-danger">Não fez peso</span>
                         }
                         @if (row.IsApproved)
                         {
@@ -80,7 +88,7 @@
                     @if (row.WeighedAt is not null)
                     {
                         <div class="col-12 small text-muted">
-                            Pesado às @row.WeighedAt.Value.ToLocalTime().ToString("HH:mm dd/MM")
+                            Pesado às @PortugalTime.FromUtc(row.WeighedAt.Value).ToString("HH:mm dd/MM")
                         </div>
                     }
                 </form>

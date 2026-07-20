@@ -46,6 +46,10 @@ public class Fight : IOrganizationScoped
             if (WeightClass is null)
                 return null;
 
+            // "+90kg" is an open class: the number is a floor, not a ceiling.
+            if (WeightClass.TrimStart().StartsWith('+'))
+                return null;
+
             var match = System.Text.RegularExpressions.Regex.Match(
                 WeightClass, @"[0-9]+([.,][0-9]+)?");
             return match.Success

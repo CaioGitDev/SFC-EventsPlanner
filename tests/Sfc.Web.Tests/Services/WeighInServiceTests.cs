@@ -133,6 +133,18 @@ public class WeighInServiceTests(SfcWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task GetWeighInSummaryAsync_CarriesFightStatus()
+    {
+        using var scope = factory.Services.CreateScope();
+        var fx = await SeedAsync(scope.ServiceProvider, "Pesagem Estado Combate");
+        await fx.Events.CancelFightAsync(fx.EventId, fx.FightId);
+
+        var rows = await fx.Events.GetWeighInSummaryAsync(fx.EventId);
+
+        Assert.All(rows, r => Assert.Equal(FightStatus.Cancelled, r.FightStatus));
+    }
+
+    [Fact]
     public async Task ReplaceAthleteAsync_RemovesReplacedAthletesWeighIn()
     {
         using var scope = factory.Services.CreateScope();
