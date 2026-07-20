@@ -70,6 +70,9 @@ public record PublicFighterProfile(string Name, string? Nickname, string Slug, s
 
 public class PublicContentService(SfcDbContext db)
 {
+    // Public = one of these statuses AND published at least once. Without the
+    // PublishedAt check, cancelling a never-announced draft (a routine backoffice
+    // action) would put its whole card on the internet.
     private static readonly EventStatus[] PublicStatuses =
         [EventStatus.Published, EventStatus.Completed, EventStatus.Cancelled];
 
@@ -87,7 +90,7 @@ public class PublicContentService(SfcDbContext db)
     {
         var today = PortugalTime.Today.ToDateTime(TimeOnly.MinValue);
         var events = await db.Events.AsNoTracking()
-            .Where(e => PublicStatuses.Contains(e.Status))
+            .Where(e => PublicStatuses.Contains(e.Status) && e.PublishedAt != null)
             .Select(e => new { Event = e, FightCount = e.Fights.Count })
             .ToListAsync(ct);
 
@@ -127,7 +130,8 @@ public class PublicContentService(SfcDbContext db)
             .Include(f => f.RedCornerAthlete)
             .Include(f => f.BlueCornerAthlete)
             .Where(f => f.RedCornerAthleteId == athlete.Id || f.BlueCornerAthleteId == athlete.Id)
-            .Join(db.Events.AsNoTracking().Where(e => PublicStatuses.Contains(e.Status)),
+            .Join(db.Events.AsNoTracking()
+                    .Where(e => PublicStatuses.Contains(e.Status) && e.PublishedAt != null),
                 f => f.EventId, e => e.Id, (f, e) => new { Fight = f, Event = e })
             .ToListAsync(ct);
 
@@ -243,7 +247,8 @@ public class PublicContentService(SfcDbContext db)
             .Include(e => e.Fights.OrderBy(f => f.Order)).ThenInclude(f => f.BlueCornerAthlete)
                 .ThenInclude(a => a!.Club)
             .Include(e => e.Fights.OrderBy(f => f.Order)).ThenInclude(f => f.Result)
-            .Where(e => e.Slug == slug && PublicStatuses.Contains(e.Status));
+            .Where(e => e.Slug == slug && PublicStatuses.Contains(e.Status)
+                && e.PublishedAt != null);
 
     internal static PublicFightCardEntry ToCardEntry(Fight fight)
         => new(fight.Order, fight.Billing.ToString(), fight.Discipline.ToString(),

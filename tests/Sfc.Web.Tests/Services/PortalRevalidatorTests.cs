@@ -192,6 +192,7 @@ public class PortalRevalidationWiringTests(SfcWebApplicationFactory factory)
             new DateTime(2026, 7, 5, 20, 0, 0), null, null, null, null, null), null, null);
         await events.AddFightAsync(evt.Id, new FightInput(red.Id, blue.Id,
             Sfc.Domain.Athletes.Discipline.MuayThai, 3, 3, "-72kg", null, false, false));
+        await events.PublishAsync(evt.Id); // results on Draft events are not public → no trigger
         var fightId = (await events.GetWithCardAsync(evt.Id))!.Fights[0].Id;
         handler.Calls.Clear();
 

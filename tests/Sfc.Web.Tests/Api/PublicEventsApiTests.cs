@@ -107,6 +107,27 @@ public class PublicEventsApiTests(SfcWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task CancelledDraft_NeverPublished_StaysInvisible()
+    {
+        using var scope = factory.Services.CreateScope();
+        var events = scope.ServiceProvider.GetRequiredService<EventService>();
+        // Routine backoffice action: a negotiation-stage draft is cancelled, not deleted.
+        var evt = await events.CreateAsync(new EventInput("API Rascunho Cancelado", null,
+            DateTime.Today.AddDays(45), null, null, null, null, null), null, null);
+        await events.CancelAsync(evt.Id);
+
+        using var client = factory.CreateClient();
+        var list = await client.GetFromJsonAsync<JsonElement>("/api/public/events", Json);
+        var response = await client.GetAsync($"/api/public/events/{evt.Slug}");
+
+        var allSlugs = list.GetProperty("upcoming").EnumerateArray()
+            .Concat(list.GetProperty("past").EnumerateArray())
+            .Select(e => e.GetProperty("slug").GetString());
+        Assert.DoesNotContain(evt.Slug, allSlugs);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task CancelledEvent_IsVisibleWithStatus()
     {
         using var scope = factory.Services.CreateScope();

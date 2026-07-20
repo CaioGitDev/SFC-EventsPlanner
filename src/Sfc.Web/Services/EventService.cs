@@ -354,7 +354,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage,
 
         var saveOutcome = await SaveResultChangesAsync(ct);
         if (saveOutcome == ResultOperationResult.Success)
-            await portalRevalidator.TriggerAsync("result-changed", evt!.Slug, ct);
+            await RevalidateIfPublicAsync(evt!, "result-changed", ct);
         return saveOutcome;
     }
 
@@ -376,7 +376,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage,
 
         var saveOutcome = await SaveResultChangesAsync(ct);
         if (saveOutcome == ResultOperationResult.Success)
-            await portalRevalidator.TriggerAsync("result-changed", evt.Slug, ct);
+            await RevalidateIfPublicAsync(evt, "result-changed", ct);
         return saveOutcome;
     }
 
@@ -534,7 +534,7 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage,
             return WeighInOperationResult.ConcurrencyConflict;
         }
 
-        await portalRevalidator.TriggerAsync("weigh-in-changed", evt.Slug, ct);
+        await RevalidateIfPublicAsync(evt, "weigh-in-changed", ct);
         return WeighInOperationResult.Success;
     }
 
