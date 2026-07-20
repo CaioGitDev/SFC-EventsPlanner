@@ -47,6 +47,27 @@ public enum CardOperationResult
 
 public record ResultInput(Guid? WinnerAthleteId, FightResultMethod Method, int? Round, string? Time);
 
+public record WeighInInput(decimal? OfficialWeightKg, decimal? ExpectedWeightKg,
+    bool IsApproved, string? Notes);
+
+public enum WeighInOperationResult
+{
+    Success,
+    EventNotFound,
+    FightNotFound,
+    AthleteNotInFight,
+    EventCancelled,
+    ApprovalRequiresWeight,
+    InvalidInput,
+}
+
+/// <summary>One row per card athlete on the weigh-in view; the future public portal's
+/// weight results will consume the same shape (prompt 05).</summary>
+public record WeighInRow(Guid FightId, int FightOrder, Guid AthleteId, string AthleteName,
+    Corner Corner, string? WeightClass, decimal? CatchweightKg, decimal? WeightLimitKg,
+    decimal? ExpectedWeightKg, decimal? OfficialWeightKg, DateTime? WeighedAt,
+    bool IsApproved, bool IsOverweight, string? Notes);
+
 public enum ResultOperationResult
 {
     Success,
@@ -256,7 +277,18 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
         if (evt.HasAthlete(newAthleteId))
             return CardOperationResult.AthleteAlreadyInCard;
 
+        var replacedAthleteId = corner == Corner.Red
+            ? fight.RedCornerAthleteId
+            : fight.BlueCornerAthleteId;
         evt.ReplaceAthlete(fightId, corner, newAthleteId);
+
+        // The weigh-in belonged to the replaced athlete in this fight — remove it with
+        // the replacement in the same SaveChanges.
+        var staleWeighIn = await db.WeighIns.SingleOrDefaultAsync(
+            w => w.FightId == fightId && w.AthleteId == replacedAthleteId, ct);
+        if (staleWeighIn is not null)
+            db.WeighIns.Remove(staleWeighIn);
+
         await db.SaveChangesAsync(ct);
         return CardOperationResult.Success;
     }
@@ -422,6 +454,102 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
     {
         var tz = TimeZoneInfo.FindSystemTimeZoneById("Europe/Lisbon");
         return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz));
+    }
+
+    /// <summary>Upserts the athlete's weigh-in for the fight (the view is a quick-entry
+    /// grid, not a CRUD). A weight miss never blocks — the call is human.</summary>
+    public async Task<WeighInOperationResult> SaveWeighInAsync(Guid eventId, Guid fightId,
+        Guid athleteId, WeighInInput input, CancellationToken ct = default)
+    {
+        var evt = await GetTrackedWithFightsAsync(eventId, ct);
+        if (evt is null)
+            return WeighInOperationResult.EventNotFound;
+        if (evt.Status == EventStatus.Cancelled)
+            return WeighInOperationResult.EventCancelled;
+
+        var fight = evt.Fights.SingleOrDefault(f => f.Id == fightId);
+        if (fight is null)
+            return WeighInOperationResult.FightNotFound;
+        if (athleteId != fight.RedCornerAthleteId && athleteId != fight.BlueCornerAthleteId)
+            return WeighInOperationResult.AthleteNotInFight;
+        if (input.IsApproved && input.OfficialWeightKg is null)
+            return WeighInOperationResult.ApprovalRequiresWeight;
+
+        var weighIn = await db.WeighIns
+            .SingleOrDefaultAsync(w => w.FightId == fightId && w.AthleteId == athleteId, ct);
+
+        try
+        {
+            if (weighIn is null)
+            {
+                weighIn = new WeighIn(db.CurrentOrganizationId, fightId, athleteId,
+                    input.ExpectedWeightKg ?? fight.WeightLimitKg);
+                db.WeighIns.Add(weighIn);
+            }
+            else if (input.ExpectedWeightKg is not null)
+            {
+                weighIn.SetExpectedWeight(input.ExpectedWeightKg);
+            }
+
+            if (input.OfficialWeightKg is not null
+                && input.OfficialWeightKg != weighIn.OfficialWeightKg)
+            {
+                weighIn.RecordOfficialWeight(input.OfficialWeightKg.Value, DateTime.UtcNow);
+            }
+
+            if (input.IsApproved)
+                weighIn.Approve();
+            else
+                weighIn.Unapprove();
+
+            weighIn.SetNotes(input.Notes);
+        }
+        catch (ArgumentException)
+        {
+            return WeighInOperationResult.InvalidInput;
+        }
+        catch (InvalidOperationException)
+        {
+            return WeighInOperationResult.ApprovalRequiresWeight;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return WeighInOperationResult.Success;
+    }
+
+    /// <summary>Every card athlete, with or without a weigh-in yet, ordered by fight then corner.</summary>
+    public async Task<List<WeighInRow>> GetWeighInSummaryAsync(Guid eventId,
+        CancellationToken ct = default)
+    {
+        var evt = await GetWithCardAsync(eventId, ct);
+        if (evt is null)
+            return [];
+
+        var fightIds = evt.Fights.Select(f => f.Id).ToList();
+        var weighIns = await db.WeighIns.AsNoTracking()
+            .Where(w => fightIds.Contains(w.FightId))
+            .ToListAsync(ct);
+
+        var rows = new List<WeighInRow>();
+        foreach (var fight in evt.Fights)
+        {
+            foreach (var corner in new[] { Corner.Red, Corner.Blue })
+            {
+                var athlete = corner == Corner.Red ? fight.RedCornerAthlete : fight.BlueCornerAthlete;
+                var athleteId = corner == Corner.Red ? fight.RedCornerAthleteId : fight.BlueCornerAthleteId;
+                var weighIn = weighIns.SingleOrDefault(
+                    w => w.FightId == fight.Id && w.AthleteId == athleteId);
+                rows.Add(new WeighInRow(fight.Id, fight.Order, athleteId,
+                    athlete is null ? "?" : $"{athlete.FirstName} {athlete.LastName}",
+                    corner, fight.WeightClass, fight.CatchweightKg, fight.WeightLimitKg,
+                    weighIn?.ExpectedWeightKg, weighIn?.OfficialWeightKg, weighIn?.WeighedAt,
+                    weighIn?.IsApproved ?? false,
+                    weighIn?.IsOverweight(fight.WeightLimitKg) ?? false,
+                    weighIn?.Notes));
+            }
+        }
+
+        return rows;
     }
 
     private static bool IsCardLocked(Event evt)
