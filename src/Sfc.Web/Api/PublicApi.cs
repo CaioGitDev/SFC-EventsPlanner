@@ -29,6 +29,20 @@ public static class PublicApi
             return detail is null ? Results.NotFound() : Results.Ok(detail);
         });
 
+        api.MapGet("/events/{slug}/results", async (string slug, PublicContentService content,
+            CancellationToken ct) =>
+        {
+            var rows = await content.GetEventResultsAsync(slug, ct);
+            return rows is null ? Results.NotFound() : Results.Ok(rows);
+        });
+
+        api.MapGet("/events/{slug}/weigh-ins", async (string slug, PublicContentService content,
+            CancellationToken ct) =>
+        {
+            var rows = await content.GetEventWeighInsAsync(slug, ct);
+            return rows is null ? Results.NotFound() : Results.Ok(rows);
+        });
+
         api.MapGet("/fighters/{slug}", async (string slug, PublicContentService content,
             CancellationToken ct) =>
         {

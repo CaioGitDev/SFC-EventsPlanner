@@ -43,6 +43,15 @@ public record PublicCardAthlete(string Name, string? Nickname, string? Slug, str
     }
 }
 
+public record PublicResultInfo(string? WinnerCorner, string Method, int? Round, string? Time);
+
+public record PublicFightResultRow(int Order, string Billing, PublicCardAthlete Red,
+    PublicCardAthlete Blue, string Status, PublicResultInfo? Result);
+
+public record PublicWeighInRow(int Order, string AthleteName, string? AthleteSlug, string Corner,
+    string? WeightClass, decimal? CatchweightKg, decimal? OfficialWeightKg, DateTime? WeighedAt,
+    bool MissedWeight);
+
 public record PublicFighterFightRow(string EventName, string EventSlug, DateTime EventDate,
     string OpponentName, string? OpponentSlug, string Summary);
 
@@ -138,6 +147,66 @@ public class PublicContentService(SfcDbContext db)
             athlete.Nickname, athlete.Slug, athlete.PhotoUrl, athlete.Nationality, athlete.Age,
             athlete.Discipline.ToString(), athlete.Status.ToString(), athlete.Club?.Name,
             athlete.RecordDisplay, athlete.WinsByKo, lastFights, next);
+    }
+
+    public async Task<List<PublicFightResultRow>?> GetEventResultsAsync(string slug,
+        CancellationToken ct = default)
+    {
+        var evt = await QueryPublicEventWithCard(slug).SingleOrDefaultAsync(ct);
+        if (evt is null)
+            return null;
+
+        return evt.Fights.Select(fight => new PublicFightResultRow(
+                fight.Order, fight.Billing.ToString(),
+                PublicCardAthlete.From(fight.RedCornerAthlete),
+                PublicCardAthlete.From(fight.BlueCornerAthlete),
+                fight.Status.ToString(),
+                fight.Result is null
+                    ? null
+                    : new PublicResultInfo(
+                        fight.Result.WinnerAthleteId is null
+                            ? null
+                            : fight.Result.WinnerAthleteId == fight.RedCornerAthleteId ? "red" : "blue",
+                        fight.Result.Method.ToString(),
+                        fight.Result.Round,
+                        fight.Result.Time)))
+            .ToList();
+    }
+
+    /// <summary>Approved weigh-ins only — approval is publication (ADR-004).</summary>
+    public async Task<List<PublicWeighInRow>?> GetEventWeighInsAsync(string slug,
+        CancellationToken ct = default)
+    {
+        var evt = await QueryPublicEventWithCard(slug).SingleOrDefaultAsync(ct);
+        if (evt is null)
+            return null;
+
+        var fightIds = evt.Fights.Select(f => f.Id).ToList();
+        var weighIns = await db.WeighIns.AsNoTracking()
+            .Where(w => fightIds.Contains(w.FightId) && w.IsApproved)
+            .ToListAsync(ct);
+
+        var rows = new List<PublicWeighInRow>();
+        foreach (var fight in evt.Fights)
+        {
+            foreach (var corner in new[] { Corner.Red, Corner.Blue })
+            {
+                var athleteId = corner == Corner.Red ? fight.RedCornerAthleteId : fight.BlueCornerAthleteId;
+                var weighIn = weighIns.SingleOrDefault(
+                    w => w.FightId == fight.Id && w.AthleteId == athleteId);
+                if (weighIn is null)
+                    continue;
+
+                var athlete = corner == Corner.Red ? fight.RedCornerAthlete : fight.BlueCornerAthlete;
+                var card = PublicCardAthlete.From(athlete);
+                rows.Add(new PublicWeighInRow(fight.Order, card.Name, card.Slug,
+                    corner.ToString().ToLowerInvariant(), fight.WeightClass, fight.CatchweightKg,
+                    weighIn.OfficialWeightKg, weighIn.WeighedAt,
+                    weighIn.IsOverweight(fight.WeightLimitKg)));
+            }
+        }
+
+        return rows;
     }
 
     private static PublicCardAthlete OpponentOf(Fight fight, Guid athleteId)
