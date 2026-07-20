@@ -5,6 +5,7 @@
     ViewData["Title"] = "Apagar atleta";
 }
 <h1 class="h3 mb-4">Apagar atleta</h1>
+<div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 <p>
     Tem a certeza que quer apagar
     <strong>@Model.Athlete?.FirstName @Model.Athlete?.LastName</strong>?

@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Sfc.Domain.Athletes;
+using Sfc.Domain.Events;
+using Sfc.Infrastructure.Persistence;
 using Sfc.Web.Services;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
@@ -108,10 +110,58 @@ public class AthleteServiceTests(SfcWebApplicationFactory factory)
         var service = scope.ServiceProvider.GetRequiredService<AthleteService>();
         var athlete = await service.CreateAsync(Input("Para", "Apagar"), (0, 0, 0, 0), null);
 
-        var deleted = await service.DeleteAsync(athlete.Id);
+        var result = await service.DeleteAsync(athlete.Id);
 
-        Assert.True(deleted);
+        Assert.Equal(AthleteDeleteResult.Deleted, result);
         Assert.Null(await service.GetAsync(athlete.Id));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_AthleteWithFight_ReturnsHasFights()
+    {
+        using var scope = factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<AthleteService>();
+        var db = scope.ServiceProvider.GetRequiredService<SfcDbContext>();
+        var red = await service.CreateAsync(Input("Com", "Combate"), (0, 0, 0, 0), null);
+        var blue = await service.CreateAsync(Input("Adversário", "Dele"), (0, 0, 0, 0), null);
+        var evt = new Event(db.CurrentOrganizationId, "SFC Guard", new DateTime(2026, 11, 1, 20, 0, 0), "sfc-guard");
+        evt.AddFight(red.Id, blue.Id, Discipline.MuayThai, 3, 3, "-72kg", null, false, false);
+        db.Events.Add(evt);
+        await db.SaveChangesAsync();
+
+        var result = await service.DeleteAsync(red.Id);
+
+        Assert.Equal(AthleteDeleteResult.HasFights, result);
+        Assert.NotNull(await service.GetAsync(red.Id));
+    }
+
+    [Fact]
+    public async Task ListActiveOptionsAsync_ReturnsLabelledActiveAthletesOnly()
+    {
+        using var scope = factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<AthleteService>();
+        var active = await service.CreateAsync(Input("Opção", "Ativa"), (3, 1, 0, 2), null);
+        var inactive = await service.CreateAsync(Input("Opção", "Inativa"), (0, 0, 0, 0), null);
+        await service.UpdateAsync(inactive.Id, Input("Opção", "Inativa"), isActive: false, null);
+
+        var options = await service.ListActiveOptionsAsync("opção", null, null);
+
+        Assert.Contains(options, o => o.Id == active.Id && o.Label.Contains("3-1-0"));
+        Assert.DoesNotContain(options, o => o.Id == inactive.Id);
+    }
+
+    [Fact]
+    public async Task ListActiveOptionsAsync_FiltersByDiscipline()
+    {
+        using var scope = factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<AthleteService>();
+        var boxer = await service.CreateAsync(Input("Filtro", "Boxe", discipline: Discipline.Boxing), (0, 0, 0, 0), null);
+
+        var k1Options = await service.ListActiveOptionsAsync("Filtro Boxe", null, Discipline.K1);
+        var boxingOptions = await service.ListActiveOptionsAsync("Filtro Boxe", null, Discipline.Boxing);
+
+        Assert.DoesNotContain(k1Options, o => o.Id == boxer.Id);
+        Assert.Contains(boxingOptions, o => o.Id == boxer.Id);
     }
 
     private static async Task<MemoryStream> CreatePngAsync(int width, int height)

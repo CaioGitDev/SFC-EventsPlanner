@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Sfc.Domain.Athletes;
 using Sfc.Domain.Clubs;
 using Sfc.Domain.Common;
+using Sfc.Domain.Events;
 using Sfc.Domain.Organizations;
 
 namespace Sfc.Infrastructure.Persistence;
@@ -21,6 +22,8 @@ public class SfcDbContext(DbContextOptions<SfcDbContext> options)
     public DbSet<Organization> Organizations => Set<Organization>();
     public DbSet<Club> Clubs => Set<Club>();
     public DbSet<Athlete> Athletes => Set<Athlete>();
+    public DbSet<Event> Events => Set<Event>();
+    public DbSet<Fight> Fights => Set<Fight>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -74,15 +77,56 @@ public class SfcDbContext(DbContextOptions<SfcDbContext> options)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        builder.Entity<Event>(entity =>
+        {
+            entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Slug).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Description).HasMaxLength(4000);
+            entity.Property(e => e.Date).HasColumnType("timestamp without time zone");
+            entity.Property(e => e.Venue).HasMaxLength(200);
+            entity.Property(e => e.City).HasMaxLength(100);
+            entity.Property(e => e.BannerUrl).HasMaxLength(500);
+            entity.Property(e => e.PosterUrl).HasMaxLength(500);
+            entity.Property(e => e.TicketsUrl).HasMaxLength(500);
+            entity.Property(e => e.StreamUrl).HasMaxLength(500);
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
+            entity.HasIndex(e => new { e.OrganizationId, e.Slug }).IsUnique();
+            entity.HasMany(e => e.Fights)
+                .WithOne()
+                .HasForeignKey(f => f.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.Navigation(e => e.Fights)
+                .HasField("_fights")
+                .UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        builder.Entity<Fight>(entity =>
+        {
+            entity.Property(f => f.Billing).HasConversion<string>().HasMaxLength(10);
+            entity.Property(f => f.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(f => f.Discipline).HasConversion<string>().HasMaxLength(20);
+            entity.Property(f => f.WeightClass).HasMaxLength(50);
+            entity.Property(f => f.CatchweightKg).HasPrecision(5, 2);
+            entity.HasIndex(f => f.EventId);
+            entity.HasOne(f => f.RedCornerAthlete)
+                .WithMany()
+                .HasForeignKey(f => f.RedCornerAthleteId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(f => f.BlueCornerAthlete)
+                .WithMany()
+                .HasForeignKey(f => f.BlueCornerAthleteId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         ApplyOrganizationQueryFilters(builder);
     }
 
     /// <summary>
     /// Applies the tenant global query filter to every entity implementing
-    /// <see cref="IOrganizationScoped"/> (ADR-002). <see cref="Club"/> and
-    /// <see cref="Athlete"/> are filtered today; the convention guarantees
-    /// every future <see cref="IOrganizationScoped"/> entity is filtered
-    /// automatically, from day one.
+    /// <see cref="IOrganizationScoped"/> (ADR-002) — currently Club, Athlete,
+    /// Event and Fight; the convention guarantees every future
+    /// <see cref="IOrganizationScoped"/> entity is filtered automatically,
+    /// from day one.
     /// </summary>
     private void ApplyOrganizationQueryFilters(ModelBuilder builder)
     {

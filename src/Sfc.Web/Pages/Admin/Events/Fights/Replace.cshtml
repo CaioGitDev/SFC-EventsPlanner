@@ -1,0 +1,71 @@
+@* src/Sfc.Web/Pages/Admin/Events/Fights/Replace.cshtml *@
+@page "{eventId:guid}/{fightId:guid}"
+@using Sfc.Domain.Athletes
+@using Sfc.Domain.Events
+@using Sfc.Web.Services
+@model Sfc.Web.Pages.Admin.Events.Fights.ReplaceModel
+@{
+    ViewData["Title"] = "Substituir atleta";
+    var fight = Model.Fight!;
+}
+<h1 class="h3 mb-1">Substituir atleta</h1>
+<p class="text-muted mb-4">
+    @Model.Event?.Name — combate @fight.Order:
+    @fight.RedCornerAthlete?.FirstName @fight.RedCornerAthlete?.LastName
+    vs @fight.BlueCornerAthlete?.FirstName @fight.BlueCornerAthlete?.LastName
+</p>
+
+<form method="get" class="row g-2 mb-3">
+    <input type="hidden" name="eventId" value="@Model.Event?.Id" />
+    <input type="hidden" name="fightId" value="@fight.Id" />
+    <div class="col-12 col-md-4">
+        <input asp-for="FilterName" class="form-control" placeholder="Filtrar atletas por nome…" />
+    </div>
+    <div class="col-6 col-md-3">
+        <select asp-for="FilterClubId" asp-items="Model.ClubOptions" class="form-select">
+            <option value="">Todos os clubes</option>
+        </select>
+    </div>
+    <div class="col-6 col-md-3">
+        <select asp-for="FilterDiscipline" class="form-select">
+            <option value="">Todas as disciplinas</option>
+            @foreach (var d in Enum.GetValues<Discipline>())
+            {
+                <option value="@d">@d.ToDisplay()</option>
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-outline-secondary">Filtrar</button>
+    </div>
+</form>
+
+<form method="post" class="col-12 col-md-8 col-lg-6"
+      onsubmit="return confirm('Substituir o atleta neste combate?')">
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+    <div class="mb-3">
+        <label class="form-label d-block">Canto a substituir *</label>
+        <div class="form-check form-check-inline">
+            <input asp-for="Corner" type="radio" value="@Sfc.Domain.Events.Corner.Red" class="form-check-input" id="cornerRed" />
+            <label class="form-check-label" for="cornerRed">
+                Canto vermelho (@fight.RedCornerAthlete?.FirstName @fight.RedCornerAthlete?.LastName)
+            </label>
+        </div>
+        <div class="form-check form-check-inline">
+            <input asp-for="Corner" type="radio" value="@Sfc.Domain.Events.Corner.Blue" class="form-check-input" id="cornerBlue" />
+            <label class="form-check-label" for="cornerBlue">
+                Canto azul (@fight.BlueCornerAthlete?.FirstName @fight.BlueCornerAthlete?.LastName)
+            </label>
+        </div>
+        <span asp-validation-for="Corner" class="text-danger d-block"></span>
+    </div>
+    <div class="mb-4">
+        <label asp-for="NewAthleteId" class="form-label">Novo atleta *</label>
+        <select asp-for="NewAthleteId" asp-items="Model.AthleteOptions" class="form-select">
+            <option value="">Escolher atleta…</option>
+        </select>
+        <span asp-validation-for="NewAthleteId" class="text-danger"></span>
+    </div>
+    <button type="submit" class="btn btn-primary">Substituir</button>
+    <a asp-page="/Admin/Events/Edit" asp-route-id="@Model.Event?.Id" class="btn btn-link">Cancelar</a>
+</form>

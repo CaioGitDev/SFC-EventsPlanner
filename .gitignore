@@ -25,6 +25,8 @@ Thumbs.db
 
 # Claude Code — definições locais da máquina
 .claude/settings.local.json
+# Config local de arranque (contém args com credenciais de dev)
+.claude/launch.json
 
 # Dados locais
 docker-volumes/

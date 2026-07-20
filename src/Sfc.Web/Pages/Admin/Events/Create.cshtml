@@ -1,0 +1,67 @@
+@* src/Sfc.Web/Pages/Admin/Events/Create.cshtml *@
+@page
+@model Sfc.Web.Pages.Admin.Events.CreateModel
+@{
+    ViewData["Title"] = "Novo evento";
+}
+<h1 class="h3 mb-4">Novo evento</h1>
+<form method="post" enctype="multipart/form-data" class="col-12 col-lg-8">
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+    <div class="row">
+        <div class="col-md-8 mb-3">
+            <label asp-for="Form.Name" class="form-label">Nome *</label>
+            <input asp-for="Form.Name" class="form-control" />
+            <span asp-validation-for="Form.Name" class="text-danger"></span>
+        </div>
+        <div class="col-md-4 mb-3">
+            <label asp-for="Form.Date" class="form-label">Data e hora *</label>
+            <input asp-for="Form.Date" type="datetime-local" class="form-control" />
+            <span asp-validation-for="Form.Date" class="text-danger"></span>
+        </div>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Form.Description" class="form-label">Descrição</label>
+        <textarea asp-for="Form.Description" class="form-control" rows="3"></textarea>
+    </div>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label asp-for="Form.Venue" class="form-label">Local</label>
+            <input asp-for="Form.Venue" class="form-control" />
+        </div>
+        <div class="col-md-6 mb-3">
+            <label asp-for="Form.City" class="form-label">Cidade</label>
+            <input asp-for="Form.City" class="form-control" />
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label asp-for="Form.TicketsUrl" class="form-label">Link de bilhetes</label>
+            <input asp-for="Form.TicketsUrl" class="form-control" />
+            <span asp-validation-for="Form.TicketsUrl" class="text-danger"></span>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label asp-for="Form.StreamUrl" class="form-label">Link de streaming (YouTube)</label>
+            <input asp-for="Form.StreamUrl" class="form-control" />
+            <span asp-validation-for="Form.StreamUrl" class="text-danger"></span>
+        </div>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Form.Slug" class="form-label">Slug (URL pública)</label>
+        <input asp-for="Form.Slug" class="form-control" placeholder="gerado automaticamente do nome" />
+        <span asp-validation-for="Form.Slug" class="text-danger"></span>
+    </div>
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <label asp-for="Banner" class="form-label">Banner</label>
+            <input asp-for="Banner" type="file" accept="image/*" class="form-control" />
+            <span asp-validation-for="Banner" class="text-danger"></span>
+        </div>
+        <div class="col-md-6 mb-4">
+            <label asp-for="Poster" class="form-label">Poster</label>
+            <input asp-for="Poster" type="file" accept="image/*" class="form-control" />
+            <span asp-validation-for="Poster" class="text-danger"></span>
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Guardar</button>
+    <a asp-page="Index" class="btn btn-link">Cancelar</a>
+</form>
