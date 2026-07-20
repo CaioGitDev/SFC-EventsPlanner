@@ -26,6 +26,7 @@ public enum EventTransitionResult
     Success,
     NotFound,
     InvalidTransition,
+    HasResults,
 }
 
 public record FightInput(Guid RedCornerAthleteId, Guid BlueCornerAthleteId,
@@ -133,8 +134,25 @@ public class EventService(SfcDbContext db, IImageStorage imageStorage)
     public Task<EventTransitionResult> CompleteAsync(Guid id, CancellationToken ct = default)
         => TransitionAsync(id, e => e.Complete(), ct);
 
-    public Task<EventTransitionResult> CancelAsync(Guid id, CancellationToken ct = default)
-        => TransitionAsync(id, e => e.Cancel(), ct);
+    public async Task<EventTransitionResult> CancelAsync(Guid id, CancellationToken ct = default)
+    {
+        // State first, results second (same order as DeleteAsync): a Completed event can
+        // never be cancelled, and reporting HasResults there would send the operator off
+        // deleting results for nothing.
+        var evt = await db.Events.SingleOrDefaultAsync(e => e.Id == id, ct);
+        if (evt is null)
+            return EventTransitionResult.NotFound;
+        if (evt.Status is EventStatus.Completed or EventStatus.Cancelled)
+            return EventTransitionResult.InvalidTransition;
+
+        // A cancelled event whose card still shows real winners that keep affecting
+        // athlete records is a contradiction — results must be deleted (reverting the
+        // records) before the event can be cancelled.
+        if (await db.Fights.AnyAsync(f => f.EventId == id && f.Result != null, ct))
+            return EventTransitionResult.HasResults;
+
+        return await TransitionAsync(id, e => e.Cancel(), ct);
+    }
 
     public async Task<EventDeleteResult> DeleteAsync(Guid id, CancellationToken ct = default)
     {

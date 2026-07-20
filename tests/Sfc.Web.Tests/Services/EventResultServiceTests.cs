@@ -247,6 +247,36 @@ public class EventResultServiceTests(SfcWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task CancelAsync_EventWithRecordedResults_ReturnsHasResults()
+    {
+        using var scope = factory.Services.CreateScope();
+        var fx = await SeedAsync(scope.ServiceProvider, "Cancelar Com Resultados");
+        await fx.Events.PublishAsync(fx.EventId);
+        await fx.Events.SaveResultAsync(fx.EventId, fx.FightId,
+            new ResultInput(fx.Red.Id, FightResultMethod.Ko, 1, null));
+
+        Assert.Equal(EventTransitionResult.HasResults, await fx.Events.CancelAsync(fx.EventId));
+
+        await fx.Events.DeleteResultAsync(fx.EventId, fx.FightId);
+        Assert.Equal(EventTransitionResult.Success, await fx.Events.CancelAsync(fx.EventId));
+    }
+
+    [Fact]
+    public async Task CancelAsync_CompletedEventWithResults_ReturnsInvalidTransitionNotHasResults()
+    {
+        using var scope = factory.Services.CreateScope();
+        var fx = await SeedAsync(scope.ServiceProvider, "Cancelar Concluído");
+        await fx.Events.PublishAsync(fx.EventId);
+        await fx.Events.SaveResultAsync(fx.EventId, fx.FightId,
+            new ResultInput(fx.Red.Id, FightResultMethod.Ko, 1, null));
+        await fx.Events.CompleteAsync(fx.EventId);
+
+        // A completed event can never be cancelled — reporting HasResults here would
+        // send the operator off deleting results for nothing.
+        Assert.Equal(EventTransitionResult.InvalidTransition, await fx.Events.CancelAsync(fx.EventId));
+    }
+
+    [Fact]
     public async Task AthleteListings_ShowRecordWithResultAggregation()
     {
         using var scope = factory.Services.CreateScope();

@@ -128,6 +128,10 @@ public class EditModel(EventService eventService) : PageModel
         {
             case EventTransitionResult.NotFound:
                 return NotFound();
+            case EventTransitionResult.HasResults:
+                TempData["Error"] =
+                    "Não é possível cancelar um evento com resultados gravados. Apague primeiro os resultados para reverter os records.";
+                return RedirectToPage(new { id });
             case EventTransitionResult.InvalidTransition:
                 // Transition POSTs carry no Form.* fields, so binding left Form blank and
                 // ModelState full of spurious required-field errors. Clear them (tag helpers
