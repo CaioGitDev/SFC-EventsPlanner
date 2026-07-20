@@ -28,5 +28,12 @@ public static class PublicApi
             var detail = await content.GetEventAsync(slug, ct);
             return detail is null ? Results.NotFound() : Results.Ok(detail);
         });
+
+        api.MapGet("/fighters/{slug}", async (string slug, PublicContentService content,
+            CancellationToken ct) =>
+        {
+            var profile = await content.GetFighterAsync(slug, ct);
+            return profile is null ? Results.NotFound() : Results.Ok(profile);
+        });
     }
 }

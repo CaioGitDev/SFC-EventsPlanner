@@ -43,6 +43,17 @@ public record PublicCardAthlete(string Name, string? Nickname, string? Slug, str
     }
 }
 
+public record PublicFighterFightRow(string EventName, string EventSlug, DateTime EventDate,
+    string OpponentName, string? OpponentSlug, string Summary);
+
+public record PublicUpcomingFight(string EventName, string EventSlug, DateTime EventDate,
+    string OpponentName, string? OpponentSlug);
+
+public record PublicFighterProfile(string Name, string? Nickname, string Slug, string? PhotoUrl,
+    string Nationality, int Age, string Discipline, string Status, string? ClubName,
+    string Record, int WinsByKo, List<PublicFighterFightRow> LastFights,
+    PublicUpcomingFight? NextFight);
+
 public class PublicContentService(SfcDbContext db)
 {
     private static readonly EventStatus[] PublicStatuses =
@@ -85,6 +96,69 @@ public class PublicContentService(SfcDbContext db)
         return new PublicEventDetail(evt.Name, evt.Slug, evt.Date, evt.Venue, evt.City,
             evt.Status.ToString(), evt.Description, evt.BannerUrl, evt.PosterUrl,
             evt.TicketsUrl, evt.StreamUrl, fights);
+    }
+
+    /// <summary>Null when missing, inactive, or without public-profile consent (ADR-004 → 404).</summary>
+    public async Task<PublicFighterProfile?> GetFighterAsync(string slug, CancellationToken ct = default)
+    {
+        var athlete = await db.Athletes.AsNoTracking()
+            .Include(a => a.Club)
+            .SingleOrDefaultAsync(a => a.Slug == slug && a.IsActive && a.PublicProfileConsent, ct);
+        if (athlete is null)
+            return null;
+
+        var today = PortugalTime.Today.ToDateTime(TimeOnly.MinValue);
+        var fights = await db.Fights.AsNoTracking()
+            .Include(f => f.Result)
+            .Include(f => f.RedCornerAthlete)
+            .Include(f => f.BlueCornerAthlete)
+            .Where(f => f.RedCornerAthleteId == athlete.Id || f.BlueCornerAthleteId == athlete.Id)
+            .Join(db.Events.AsNoTracking().Where(e => PublicStatuses.Contains(e.Status)),
+                f => f.EventId, e => e.Id, (f, e) => new { Fight = f, Event = e })
+            .ToListAsync(ct);
+
+        var lastFights = fights
+            .Where(x => x.Fight.Result is not null)
+            .OrderByDescending(x => x.Event.Date)
+            .Take(5)
+            .Select(x => new PublicFighterFightRow(x.Event.Name, x.Event.Slug, x.Event.Date,
+                OpponentOf(x.Fight, athlete.Id).Name, OpponentOf(x.Fight, athlete.Id).Slug,
+                ResultSummaryFor(x.Fight, athlete.Id)))
+            .ToList();
+
+        var next = fights
+            .Where(x => x.Fight.Status == FightStatus.Scheduled
+                && x.Event.Status == EventStatus.Published && x.Event.Date >= today)
+            .OrderBy(x => x.Event.Date)
+            .Select(x => new PublicUpcomingFight(x.Event.Name, x.Event.Slug, x.Event.Date,
+                OpponentOf(x.Fight, athlete.Id).Name, OpponentOf(x.Fight, athlete.Id).Slug))
+            .FirstOrDefault();
+
+        return new PublicFighterProfile($"{athlete.FirstName} {athlete.LastName}",
+            athlete.Nickname, athlete.Slug, athlete.PhotoUrl, athlete.Nationality, athlete.Age,
+            athlete.Discipline.ToString(), athlete.Status.ToString(), athlete.Club?.Name,
+            athlete.RecordDisplay, athlete.WinsByKo, lastFights, next);
+    }
+
+    private static PublicCardAthlete OpponentOf(Fight fight, Guid athleteId)
+        => PublicCardAthlete.From(fight.RedCornerAthleteId == athleteId
+            ? fight.BlueCornerAthlete
+            : fight.RedCornerAthlete);
+
+    /// <summary>Result line from the athlete's perspective: "Vitória por KO (R2 1:11)", "Derrota…", "Empate", "No contest".</summary>
+    private static string ResultSummaryFor(Fight fight, Guid athleteId)
+    {
+        var result = fight.Result!;
+        if (result.Method == FightResultMethod.Draw)
+            return "Empate";
+        if (result.Method == FightResultMethod.NoContest)
+            return "No contest";
+
+        var outcome = result.WinnerAthleteId == athleteId ? "Vitória" : "Derrota";
+        var summary = $"{outcome} por {result.Method.ToDisplay()}";
+        if (result.Round is not null)
+            summary += $" (R{result.Round}{(result.Time is null ? "" : $" {result.Time}")})";
+        return summary;
     }
 
     internal IQueryable<Event> QueryPublicEventWithCard(string slug)
