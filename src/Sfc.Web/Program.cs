@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Sfc.Infrastructure.Persistence;
 using Sfc.Infrastructure.Storage;
+using Sfc.Web.Api;
 using Sfc.Web.Services;
 using Sfc.Web.Startup;
 
@@ -47,6 +48,7 @@ builder.Services.AddSingleton<IImageStorage, S3ImageStorage>();
 builder.Services.AddScoped<ClubService>();
 builder.Services.AddScoped<AthleteService>();
 builder.Services.AddScoped<EventService>();
+builder.Services.AddScoped<PublicContentService>();
 
 var app = builder.Build();
 
@@ -54,6 +56,7 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapRazorPages();
+app.MapPublicApi();
 
 await DatabaseSeeder.SeedAsync(app.Services, app.Configuration);
 
