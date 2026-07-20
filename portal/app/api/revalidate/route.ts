@@ -18,10 +18,13 @@ export async function POST(req: NextRequest) {
     // Empty/invalid body still triggers a broad revalidation below.
   }
 
-  revalidateTag("events");
-  revalidateTag("fighters");
+  // expire: 0 — a backoffice webhook wants the change reflected promptly, not
+  // stale-while-revalidate (the recommended pattern for external callers).
+  const now = { expire: 0 };
+  revalidateTag("events", now);
+  revalidateTag("fighters", now);
   if (typeof eventSlug === "string" && eventSlug.length > 0) {
-    revalidateTag(`event:${eventSlug}`);
+    revalidateTag(`event:${eventSlug}`, now);
   }
 
   return Response.json({
