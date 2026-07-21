@@ -123,7 +123,9 @@ public class CsvTableTests : IDisposable
     [Fact]
     public void Required_WhenBlank_ThrowsWithFileAndLine()
     {
-        var path = WriteCsv("athletes.csv", "first_name\n\n");
+        // Two columns on purpose: in a single-column file a blank line and a row with an
+        // empty required field are indistinguishable, and this test is about the latter.
+        var path = WriteCsv("athletes.csv", "first_name,city\n,Braga\n");
 
         var rows = CsvTable.Read(path);
         var ex = Assert.Throws<ImportException>(() => rows[0].Required("first_name"));
@@ -131,6 +133,22 @@ public class CsvTableTests : IDisposable
         Assert.Contains("athletes.csv", ex.Message);
         Assert.Contains("2", ex.Message);
         Assert.Contains("first_name", ex.Message);
+    }
+
+    [Fact]
+    public void Read_SkipsBlankLinesWithoutInventingRows()
+    {
+        // Humans leave stray blank lines when editing spreadsheets. A phantom all-empty
+        // row would later fail validation pointing at a line that holds no data.
+        var path = WriteCsv("clubs.csv",
+            "name,city\nScorpion Gym,Lisboa\n\nLeiria Fight,Leiria\n\n");
+
+        var rows = CsvTable.Read(path);
+
+        Assert.Equal(2, rows.Count);
+        Assert.Equal("Scorpion Gym", rows[0].Required("name"));
+        Assert.Equal("Leiria Fight", rows[1].Required("name"));
+        Assert.Equal(4, rows[1].Line);   // physical line, blank line counted
     }
 
     [Fact]
@@ -293,7 +311,7 @@ public static class CsvTable
 - [ ] **Step 5: Correr os testes e confirmar que passam**
 
 Run: `dotnet test tests/Sfc.Web.Tests --filter "FullyQualifiedName~CsvTableTests"`
-Expected: PASS, 5 testes.
+Expected: PASS, 6 testes.
 
 - [ ] **Step 6: Commit**
 
