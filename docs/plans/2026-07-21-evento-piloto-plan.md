@@ -1192,7 +1192,10 @@ public class SeedDatasetTests(SfcWebApplicationFactory factory)
         var db = scope.ServiceProvider.GetRequiredService<SfcDbContext>();
         var athletes = await db.Athletes.AsNoTracking().ToListAsync();
 
-        Assert.True(athletes.Count(a => a.Age < 18 && !a.PublicProfileConsent) >= 3,
+        // Fixed cut-off, not Age: Age moves with the wall clock, so asserting on it would
+        // quietly start failing once the 2009-2011 cohort turns 18.
+        var minorCutoff = new DateOnly(2008, 1, 1);
+        Assert.True(athletes.Count(a => a.DateOfBirth > minorCutoff && !a.PublicProfileConsent) >= 3,
             "o dataset tem de conter menores sem consentimento — é o que testa o caminho RGPD");
         Assert.True(athletes.Count(a => a.Nickname is null) >= 15);
         Assert.True(athletes.Count(a => a.Wins == 0 && a.Losses == 0 && a.Draws == 0) >= 5);
