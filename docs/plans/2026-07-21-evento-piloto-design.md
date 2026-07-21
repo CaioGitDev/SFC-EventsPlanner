@@ -45,8 +45,9 @@ dotnet run --project src/Sfc.Web -- import ./data/seed [--dry-run]
   `DbContext` — para exercitar geração e colisão de slugs, validações de `Athlete` e a
   agregação de records por `ApplyResultDelta`
 - `--dry-run` valida e relata sem escrever
-- **Idempotente:** clube existente (por nome) e atleta existente (por slug) são saltados e
-  contados; reimportar não duplica
+- **Idempotente:** clube existente (por nome) e atleta existente (por nome + data de
+  nascimento) são saltados e contados; reimportar não duplica. A chave do atleta não é o
+  slug porque o serviço resolve colisões acrescentando sufixos (`joao-silva-2`)
 - Erros reportam **número de linha e ficheiro**; `club_name` desconhecido é erro, não um
   atleta órfão criado em silêncio
 - Relatório final: criados / saltados / erros, por ficheiro
@@ -59,9 +60,10 @@ dotnet run --project src/Sfc.Web -- import ./data/seed [--dry-run]
   `status`, `public_profile_consent`, `baseline_wins`, `baseline_losses`, `baseline_draws`,
   `baseline_kos`
 - `events.csv` — `name`, `slug`, `date`, `venue`, `city`, `status`
-- `fights.csv` — `event_slug`, `order`, `billing`, `discipline`, `rounds`,
+- `fights.csv` — `event_slug`, `order`, `discipline`, `rounds`,
   `round_duration_minutes`, `weight_class`, `catchweight_kg`, `is_title_fight`,
   `is_amateur`, `red_athlete_slug`, `blue_athlete_slug`
+  (**sem coluna de billing**: `Event.RecalculateBilling()` deriva main/co-main da ordem)
 - `results.csv` — `event_slug`, `fight_order`, `winner_slug`, `method`, `round`, `time`
 
 Ligações por **nome/slug**, não por GUID — é o que um humano consegue produzir a partir de
