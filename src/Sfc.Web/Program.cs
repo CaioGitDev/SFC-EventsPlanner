@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Sfc.Infrastructure.Persistence;
 using Sfc.Infrastructure.Storage;
 using Sfc.Web.Api;
+using Sfc.Web.Import;
 using Sfc.Web.Services;
 using Sfc.Web.Startup;
 
@@ -63,6 +64,10 @@ app.MapPublicApi();
 
 await DatabaseSeeder.SeedAsync(app.Services, app.Configuration);
 
+if (args.Length > 0 && args[0] == "import")
+    return await ImportCommand.RunAsync(app.Services, args[1..]);
+
 app.Run();
+return 0;
 
 public partial class Program;
