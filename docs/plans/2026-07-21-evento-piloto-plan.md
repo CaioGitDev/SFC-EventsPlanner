@@ -43,6 +43,13 @@ autoridade.
 4. **O catch por linha é `Exception`**, com `OperationCanceledException` a ser relançada.
    O `ImportReport` promete que uma linha má não mata a importação — o catch estreito
    contradizia essa promessa.
+5. **A coluna `date` de `events.csv` é hora local de Lisboa, sem fuso.** Formato
+   `yyyy-MM-ddTHH:mm`. `Event.Date` é `DateTime` naive local por decisão fechada
+   (`docs/plans/2026-07-15-eventos-fightcard-design.md:18`), e os fixtures originais deste
+   plano traziam sufixo `Z` — o que levou o código a tratar dígitos UTC como hora de
+   Lisboa, um desvio de uma hora durante todo o horário de verão. Um valor com `Z` ou com
+   offset é **rejeitado com erro**, não reinterpretado em silêncio: é uma spreadsheet
+   humana e a ambiguidade tem de doer no sítio certo.
 
 ## Factos do código que condicionam este plano
 
@@ -815,7 +822,7 @@ git commit -m "Import athletes from CSV with natural-key idempotency"
             "Hugo,Task4Derrotado,,1997-07-07,Portugal,,,MuayThai,-72kg,71.5,175,Professional,1,4,2,0,1\n");
         Write("events.csv",
             "name,slug,date,venue,city,status\n" +
-            "Task4 Fight Night,task4-fight-night,2026-05-30T20:00:00Z,Pavilhão,Almada,Completed\n");
+            "Task4 Fight Night,task4-fight-night,2026-05-30T20:00,Pavilhão,Almada,Completed\n");
         Write("fights.csv",
             "event_slug,order,discipline,rounds,round_duration_minutes,weight_class," +
             "catchweight_kg,is_title_fight,is_amateur,red_athlete_slug,blue_athlete_slug\n" +
@@ -850,7 +857,7 @@ git commit -m "Import athletes from CSV with natural-key idempotency"
     {
         Write("events.csv",
             "name,slug,date,venue,city,status\n" +
-            "Task4 Broken,task4-broken,2026-06-30T20:00:00Z,Pavilhão,Almada,Published\n");
+            "Task4 Broken,task4-broken,2026-06-30T20:00,Pavilhão,Almada,Published\n");
         Write("fights.csv",
             "event_slug,order,discipline,rounds,round_duration_minutes,weight_class," +
             "catchweight_kg,is_title_fight,is_amateur,red_athlete_slug,blue_athlete_slug\n" +
