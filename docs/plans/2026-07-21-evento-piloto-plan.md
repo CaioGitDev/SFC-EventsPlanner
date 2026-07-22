@@ -283,6 +283,9 @@ public static class CsvTable
         {
             TrimOptions = TrimOptions.Trim,
             MissingFieldFound = null,
+            // Explicit: a stray blank line must not become an all-empty phantom row that
+            // later fails validation pointing at a line holding no data.
+            IgnoreBlankLines = true,
         };
 
         using var reader = new StreamReader(path);
