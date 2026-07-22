@@ -1,4 +1,6 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Sfc.Infrastructure.Persistence;
 using Sfc.Web.Import;
 using Sfc.Web.Services;
 using Xunit;
@@ -173,6 +175,88 @@ public class SeedImporterTests(SfcWebApplicationFactory factory)
         using var scope = factory.Services.CreateScope();
         var clubs = scope.ServiceProvider.GetRequiredService<ClubService>();
         Assert.Single(await clubs.SearchAsync("Task2 Second Gym"));
+    }
+
+    private const string ClubsHeader =
+        "name,city,country,contact_email,contact_phone,coaches\n";
+
+    private const string AthletesHeader =
+        "first_name,last_name,nickname,date_of_birth,nationality,club_name,coach_name," +
+        "discipline,weight_class,weight_kg,height_cm,status,public_profile_consent," +
+        "baseline_wins,baseline_losses,baseline_draws,baseline_kos\n";
+
+    [Fact]
+    public async Task ImportAsync_CreatesAthleteLinkedToClubWithBaselineRecord()
+    {
+        Write("clubs.csv", ClubsHeader + "Task3 Home Gym,Lisboa,Portugal,,,\n");
+        Write("athletes.csv", AthletesHeader +
+            "Rui,Task3Marques,O Falcão,1998-03-11,Portugal,Task3 Home Gym,Mestre Rui," +
+            "MuayThai,-72kg,71.4,178,Professional,1,12,3,1,7\n");
+
+        var report = await RunAsync();
+
+        Assert.False(report.HasErrors);
+        Assert.Equal(1, report.CountCreated("athletes.csv"));
+
+        using var scope = factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<AthleteService>();
+        var found = await service.SearchAsync("Task3Marques", null, null);
+        var item = Assert.Single(found.Items);
+        Assert.Equal("12-3-1", item.Record);
+        Assert.Equal("Task3 Home Gym", item.ClubName);
+    }
+
+    [Fact]
+    public async Task ImportAsync_PreservesMinorWithoutConsent()
+    {
+        Write("athletes.csv", AthletesHeader +
+            "Ana,Task3Menor,,2010-06-02,Portugal,,,Kickboxing,-52kg,51.2,160,Amateur,0,0,0,0,0\n");
+
+        await RunAsync();
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SfcDbContext>();
+        var athlete = await db.Athletes.SingleAsync(a => a.LastName == "Task3Menor");
+        Assert.False(athlete.PublicProfileConsent);
+        Assert.Null(athlete.ClubId);
+    }
+
+    [Fact]
+    public async Task ImportAsync_WithUnknownClub_ReportsErrorAndSkipsAthlete()
+    {
+        Write("athletes.csv", AthletesHeader +
+            "Zeca,Task3Orfao,,1995-01-01,Portugal,Ginásio Que Não Existe,,Boxing,,,,Amateur,1,0,0,0,0\n");
+
+        var report = await RunAsync();
+
+        Assert.True(report.HasErrors);
+        Assert.Contains(report.Errors, e => e.Contains("Ginásio Que Não Existe"));
+        Assert.Equal(0, report.CountCreated("athletes.csv"));
+    }
+
+    [Fact]
+    public async Task ImportAsync_IsIdempotentByNameAndDateOfBirth()
+    {
+        Write("athletes.csv", AthletesHeader +
+            "Beto,Task3Repete,,1993-09-09,Portugal,,,MMA,,,,Professional,1,4,4,0,2\n");
+
+        await RunAsync();
+        var second = await RunAsync();
+
+        Assert.Equal(0, second.CountCreated("athletes.csv"));
+        Assert.Equal(1, second.CountSkipped("athletes.csv"));
+    }
+
+    [Fact]
+    public async Task ImportAsync_WithKosAboveWins_ReportsErrorWithLineNumber()
+    {
+        Write("athletes.csv", AthletesHeader +
+            "Nuno,Task3Invalido,,1990-01-01,Portugal,,,Boxing,,,,Professional,1,2,0,0,5\n");
+
+        var report = await RunAsync();
+
+        Assert.True(report.HasErrors);
+        Assert.Contains(report.Errors, e => e.Contains("athletes.csv") && e.Contains("linha 2"));
     }
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
