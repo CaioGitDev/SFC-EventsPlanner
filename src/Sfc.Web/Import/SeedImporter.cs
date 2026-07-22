@@ -319,11 +319,15 @@ public class SeedImporter(ClubService clubs, AthleteService athletes, EventServi
 
                 await AddFightsAsync(evt.Id, slug, fightRows, athleteIds, report, ct);
 
+                // Results must never be saved before the event is published (required
+                // lifecycle) — a Draft-status row in events.csv therefore never touches
+                // results.csv at all, even if a mismatched row happens to reference it.
                 var status = row.Enum<EventStatus>("status") ?? EventStatus.Draft;
                 if (status is EventStatus.Published or EventStatus.Completed)
+                {
                     await events.PublishAsync(evt.Id, ct);
-
-                await SaveResultsAsync(evt.Id, slug, resultRows, athleteIds, report, ct);
+                    await SaveResultsAsync(evt.Id, slug, resultRows, athleteIds, report, ct);
+                }
 
                 if (status is EventStatus.Completed)
                     await events.CompleteAsync(evt.Id, ct);
