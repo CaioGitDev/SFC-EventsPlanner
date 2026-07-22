@@ -1,5 +1,7 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Sfc.Domain.Athletes;
+using Sfc.Domain.Events;
 using Sfc.Infrastructure.Persistence;
 using Sfc.Web.Services;
 
@@ -10,10 +12,7 @@ namespace Sfc.Web.Import;
 /// generation, domain validation and record aggregation are exercised for real — the
 /// point is to prove the platform, not to fill a database.
 /// </summary>
-public class SeedImporter(ClubService clubs, AthleteService athletes,
-#pragma warning disable CS9113 // events is unread here by design: seam for Task 4.
-    EventService events,
-#pragma warning restore CS9113
+public class SeedImporter(ClubService clubs, AthleteService athletes, EventService events,
     SfcDbContext db)
 {
     public async Task<ImportReport> ImportAsync(string directory, bool dryRun,
@@ -25,6 +24,7 @@ public class SeedImporter(ClubService clubs, AthleteService athletes,
 
         await ImportClubsAsync(directory, report, ct);
         await ImportAthletesAsync(directory, report, ct);
+        await ImportEventsAsync(directory, report, ct);
 
         if (dryRun)
             await transaction.RollbackAsync(ct);
@@ -235,6 +235,253 @@ public class SeedImporter(ClubService clubs, AthleteService athletes,
                 // transaction; this only forgets local tracking.
                 db.ChangeTracker.Clear();
             }
+        }
+    }
+
+    private async Task ImportEventsAsync(string directory, ImportReport report,
+        CancellationToken ct)
+    {
+        const string file = "events.csv";
+        var path = Path.Combine(directory, file);
+        if (!File.Exists(path))
+            return;
+
+        List<CsvRow> rows;
+        try
+        {
+            rows = CsvTable.Read(path, "name", "slug", "date", "venue", "city",
+                "tickets_url", "stream_url", "description", "status");
+        }
+        catch (ImportException ex)
+        {
+            // Same contract as clubs.csv/athletes.csv: a bad header cannot be trusted, but
+            // the run must not abort.
+            report.Error(ex.Message);
+            return;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Same contract as clubs.csv/athletes.csv: CsvHelper's own exception types on
+            // malformed quoting are recorded like any other import error, exception type
+            // kept so a real programming bug is not disguised as a spreadsheet problem.
+            report.Error($"{file}: não foi possível ler o ficheiro ({ex.GetType().Name}): {ex.Message}");
+            return;
+        }
+
+        // fights.csv and results.csv are read once up front, independently of whether they
+        // fail: a bad header in either is recorded like any other import error but must not
+        // block events.csv from importing (the card/results for that event are simply empty).
+        var fightRows = ReadRelatedTable(directory, "fights.csv", report, "event_slug", "order",
+            "discipline", "rounds", "round_duration_minutes", "weight_class", "catchweight_kg",
+            "is_title_fight", "is_amateur", "red_athlete_slug", "blue_athlete_slug");
+        var resultRows = ReadRelatedTable(directory, "results.csv", report, "event_slug",
+            "fight_order", "winner_slug", "method", "round", "time");
+
+        // Read up front via AsNoTracking(): the row loop below calls db.ChangeTracker.Clear()
+        // on error, which must not leave these dictionaries depending on tracked entities.
+        var athleteIds = await db.Athletes.AsNoTracking()
+            .ToDictionaryAsync(a => a.Slug, a => a.Id, StringComparer.OrdinalIgnoreCase, ct);
+        var existingSlugs = (await db.Events.AsNoTracking().Select(e => e.Slug).ToListAsync(ct))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var row in rows)
+        {
+            try
+            {
+                var slug = row.Required("slug");
+                if (!existingSlugs.Add(slug))
+                {
+                    report.Skipped(file);
+                    continue;
+                }
+
+                // Event.Date is a naive local DateTime (column "timestamp without time zone" —
+                // see docs/plans/2026-07-15-eventos-fightcard-design.md): AdjustToUniversal
+                // normalises any offset in the CSV value first, so parsing is deterministic
+                // regardless of the machine's local time zone, then SpecifyKind strips the
+                // resulting Utc marker Npgsql would otherwise reject for that column type,
+                // taking the literal date/time digits as the naive local value.
+                var date = DateTime.SpecifyKind(
+                    DateTime.Parse(row.Required("date"), CultureInfo.InvariantCulture,
+                        DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal),
+                    DateTimeKind.Unspecified);
+
+                var evt = await events.CreateAsync(new EventInput(row.Required("name"),
+                    row.Text("description"), date, row.Text("venue"), row.Text("city"),
+                    row.Text("tickets_url"), row.Text("stream_url"), slug),
+                    banner: null, poster: null, ct);
+
+                report.Created(file);
+
+                await AddFightsAsync(evt.Id, slug, fightRows, athleteIds, report, ct);
+
+                var status = row.Enum<EventStatus>("status") ?? EventStatus.Draft;
+                if (status is EventStatus.Published or EventStatus.Completed)
+                    await events.PublishAsync(evt.Id, ct);
+
+                await SaveResultsAsync(evt.Id, slug, resultRows, athleteIds, report, ct);
+
+                if (status is EventStatus.Completed)
+                    await events.CompleteAsync(evt.Id, ct);
+            }
+            catch (ImportException ex)
+            {
+                // Already pt-PT and already carries file/line/column — pass through as-is.
+                report.Error(ex.Message);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Same contract as clubs.csv/athletes.csv rows: any other exception (domain
+                // ArgumentException, DbUpdateException, a genuine bug) is framed in pt-PT
+                // for the human reading the report, exception type kept so a real
+                // programming bug is not disguised as a spreadsheet problem.
+                report.Error(row.Fail(
+                    $"rejeitado pela validação do domínio ({ex.GetType().Name}): {ex.Message}").Message);
+
+                // Same reasoning as ImportClubsAsync/ImportAthletesAsync: a row that fails
+                // leaves rejected entities tracked, which would break every subsequent row.
+                db.ChangeTracker.Clear();
+            }
+        }
+    }
+
+    /// <summary>Adds the event's fights in card order (the CSV's <c>order</c> column);
+    /// <see cref="Event.AddFight"/> derives billing from position, so no billing input
+    /// exists here.</summary>
+    private async Task AddFightsAsync(Guid eventId, string eventSlug, List<CsvRow> fightRows,
+        Dictionary<string, Guid> athleteIds, ImportReport report, CancellationToken ct)
+    {
+        const string file = "fights.csv";
+        var rows = fightRows
+            .Where(r => string.Equals(r.Text("event_slug"), eventSlug, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(r => r.Int("order") ?? 0);
+
+        foreach (var row in rows)
+        {
+            try
+            {
+                var result = await events.AddFightAsync(eventId, new FightInput(
+                    AthleteId(row, "red_athlete_slug", athleteIds),
+                    AthleteId(row, "blue_athlete_slug", athleteIds),
+                    row.Enum<Discipline>("discipline")
+                        ?? throw row.Fail("discipline", "valor obrigatório em falta"),
+                    row.Int("rounds") ?? 3, row.Int("round_duration_minutes") ?? 3,
+                    row.Text("weight_class"), row.Decimal("catchweight_kg"),
+                    row.Bool("is_title_fight"), row.Bool("is_amateur")), ct);
+
+                if (result is not CardOperationResult.Success)
+                    throw row.Fail($"não foi possível adicionar o combate ({result})");
+
+                report.Created(file);
+            }
+            catch (ImportException ex)
+            {
+                report.Error(ex.Message);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                report.Error(row.Fail(
+                    $"rejeitado pela validação do domínio ({ex.GetType().Name}): {ex.Message}").Message);
+                db.ChangeTracker.Clear();
+            }
+        }
+    }
+
+    /// <summary>Saves results only after the event has been published (required lifecycle:
+    /// Draft → fights added → Published → results saved → Completed).</summary>
+    private async Task SaveResultsAsync(Guid eventId, string eventSlug, List<CsvRow> resultRows,
+        Dictionary<string, Guid> athleteIds, ImportReport report, CancellationToken ct)
+    {
+        const string file = "results.csv";
+        var evt = await events.GetWithCardAsync(eventId, ct);
+        if (evt is null)
+            return;
+
+        var byOrder = evt.Fights.ToDictionary(f => f.Order, f => f.Id);
+        var rows = resultRows
+            .Where(r => string.Equals(r.Text("event_slug"), eventSlug, StringComparison.OrdinalIgnoreCase));
+
+        foreach (var row in rows)
+        {
+            try
+            {
+                var order = row.Int("fight_order")
+                    ?? throw row.Fail("fight_order", "valor obrigatório em falta");
+                if (!byOrder.TryGetValue(order, out var fightId))
+                    throw row.Fail($"não existe combate com ordem {order} em '{eventSlug}'");
+
+                Guid? winnerId = row.Text("winner_slug") is { } slug
+                    ? AthleteId(row, "winner_slug", athleteIds)
+                    : null;
+
+                var result = await events.SaveResultAsync(eventId, fightId, new ResultInput(
+                    winnerId,
+                    row.Enum<FightResultMethod>("method")
+                        ?? throw row.Fail("method", "valor obrigatório em falta"),
+                    row.Int("round"), row.Text("time")), ct);
+
+                if (result is not ResultOperationResult.Success)
+                    throw row.Fail($"não foi possível gravar o resultado ({result})");
+
+                report.Created(file);
+            }
+            catch (ImportException ex)
+            {
+                report.Error(ex.Message);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                report.Error(row.Fail(
+                    $"rejeitado pela validação do domínio ({ex.GetType().Name}): {ex.Message}").Message);
+                db.ChangeTracker.Clear();
+            }
+        }
+    }
+
+    private static Guid AthleteId(CsvRow row, string column, Dictionary<string, Guid> athleteIds)
+    {
+        var slug = row.Required(column);
+        return athleteIds.TryGetValue(slug, out var id)
+            ? id
+            : throw row.Fail(column, $"não existe atleta com o slug '{slug}'");
+    }
+
+    private static List<CsvRow> ReadRelatedTable(string directory, string file, ImportReport report,
+        params string[] knownColumns)
+    {
+        var path = Path.Combine(directory, file);
+        if (!File.Exists(path))
+            return [];
+
+        try
+        {
+            return CsvTable.Read(path, knownColumns);
+        }
+        catch (ImportException ex)
+        {
+            report.Error(ex.Message);
+            return [];
+        }
+        catch (Exception ex)
+        {
+            report.Error($"{file}: não foi possível ler o ficheiro ({ex.GetType().Name}): {ex.Message}");
+            return [];
         }
     }
 

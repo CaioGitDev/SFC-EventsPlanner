@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Sfc.Domain.Events;
 using Sfc.Infrastructure.Persistence;
 using Sfc.Web.Import;
 using Sfc.Web.Services;
@@ -257,6 +258,61 @@ public class SeedImporterTests(SfcWebApplicationFactory factory)
 
         Assert.True(report.HasErrors);
         Assert.Contains(report.Errors, e => e.Contains("athletes.csv") && e.Contains("linha 2"));
+    }
+
+    [Fact]
+    public async Task ImportAsync_BuildsCompletedEventAndAggregatesRecords()
+    {
+        Write("athletes.csv", AthletesHeader +
+            "Ivo,Task4Vencedor,,1996-05-05,Portugal,,,MuayThai,-72kg,71.0,177,Professional,1,5,1,0,3\n" +
+            "Hugo,Task4Derrotado,,1997-07-07,Portugal,,,MuayThai,-72kg,71.5,175,Professional,1,4,2,0,1\n");
+        Write("events.csv",
+            "name,slug,date,venue,city,status\n" +
+            "Task4 Fight Night,task4-fight-night,2026-05-30T20:00:00Z,Pavilhão,Almada,Completed\n");
+        Write("fights.csv",
+            "event_slug,order,discipline,rounds,round_duration_minutes,weight_class," +
+            "catchweight_kg,is_title_fight,is_amateur,red_athlete_slug,blue_athlete_slug\n" +
+            "task4-fight-night,1,MuayThai,3,3,-72kg,,0,0,ivo-task4vencedor,hugo-task4derrotado\n");
+        Write("results.csv",
+            "event_slug,fight_order,winner_slug,method,round,time\n" +
+            "task4-fight-night,1,ivo-task4vencedor,Ko,2,1:45\n");
+
+        var report = await RunAsync();
+
+        Assert.False(report.HasErrors);
+        Assert.Equal(1, report.CountCreated("events.csv"));
+        Assert.Equal(1, report.CountCreated("fights.csv"));
+        Assert.Equal(1, report.CountCreated("results.csv"));
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SfcDbContext>();
+
+        var winner = await db.Athletes.SingleAsync(a => a.LastName == "Task4Vencedor");
+        Assert.Equal("6-1-0", winner.RecordDisplay);   // baseline 5-1-0 + 1 vitória
+        Assert.Equal(4, winner.WinsByKo);              // baseline 3 + 1 KO
+
+        var loser = await db.Athletes.SingleAsync(a => a.LastName == "Task4Derrotado");
+        Assert.Equal("4-3-0", loser.RecordDisplay);    // baseline 4-2-0 + 1 derrota
+
+        var evt = await db.Events.SingleAsync(e => e.Slug == "task4-fight-night");
+        Assert.Equal(EventStatus.Completed, evt.Status);
+    }
+
+    [Fact]
+    public async Task ImportAsync_WithUnknownAthleteSlug_ReportsErrorWithLineNumber()
+    {
+        Write("events.csv",
+            "name,slug,date,venue,city,status\n" +
+            "Task4 Broken,task4-broken,2026-06-30T20:00:00Z,Pavilhão,Almada,Published\n");
+        Write("fights.csv",
+            "event_slug,order,discipline,rounds,round_duration_minutes,weight_class," +
+            "catchweight_kg,is_title_fight,is_amateur,red_athlete_slug,blue_athlete_slug\n" +
+            "task4-broken,1,Boxing,3,3,-67kg,,0,1,nao-existe,tambem-nao-existe\n");
+
+        var report = await RunAsync();
+
+        Assert.True(report.HasErrors);
+        Assert.Contains(report.Errors, e => e.Contains("fights.csv") && e.Contains("nao-existe"));
     }
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
