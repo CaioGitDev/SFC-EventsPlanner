@@ -268,7 +268,7 @@ public class SeedImporterTests(SfcWebApplicationFactory factory)
             "Hugo,Task4Derrotado,,1997-07-07,Portugal,,,MuayThai,-72kg,71.5,175,Professional,1,4,2,0,1\n");
         Write("events.csv",
             "name,slug,date,venue,city,status\n" +
-            "Task4 Fight Night,task4-fight-night,2026-05-30T20:00:00Z,Pavilhão,Almada,Completed\n");
+            "Task4 Fight Night,task4-fight-night,2026-05-30T20:00,Pavilhão,Almada,Completed\n");
         Write("fights.csv",
             "event_slug,order,discipline,rounds,round_duration_minutes,weight_class," +
             "catchweight_kg,is_title_fight,is_amateur,red_athlete_slug,blue_athlete_slug\n" +
@@ -303,7 +303,7 @@ public class SeedImporterTests(SfcWebApplicationFactory factory)
     {
         Write("events.csv",
             "name,slug,date,venue,city,status\n" +
-            "Task4 Broken,task4-broken,2026-06-30T20:00:00Z,Pavilhão,Almada,Published\n");
+            "Task4 Broken,task4-broken,2026-06-30T20:00,Pavilhão,Almada,Published\n");
         Write("fights.csv",
             "event_slug,order,discipline,rounds,round_duration_minutes,weight_class," +
             "catchweight_kg,is_title_fight,is_amateur,red_athlete_slug,blue_athlete_slug\n" +
@@ -313,6 +313,137 @@ public class SeedImporterTests(SfcWebApplicationFactory factory)
 
         Assert.True(report.HasErrors);
         Assert.Contains(report.Errors, e => e.Contains("fights.csv") && e.Contains("nao-existe"));
+    }
+
+    [Fact]
+    public async Task ImportAsync_StoresEventDateAsLisbonWallClockDuringDst()
+    {
+        // 2026-05-30 falls in Portugal's DST season (WEST, UTC+1). The old parsing
+        // (AdjustToUniversal + AssumeUniversal, then SpecifyKind(Unspecified)) normalised
+        // the digits to UTC first, silently shifting a "20:00" CSV value by one hour before
+        // storing it — invisible in winter, wrong every summer. The fix takes the digits
+        // exactly as written, with no time-zone math at all.
+        Write("events.csv",
+            "name,slug,date,venue,city,status\n" +
+            "Task4 Dst Night,task4-dst-night,2026-05-30T20:00,Pavilhão,Almada,Draft\n");
+
+        var report = await RunAsync();
+
+        Assert.False(report.HasErrors);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SfcDbContext>();
+        var evt = await db.Events.SingleAsync(e => e.Slug == "task4-dst-night");
+
+        Assert.Equal(new DateTime(2026, 5, 30, 20, 0, 0), evt.Date);
+        Assert.Equal(DateTimeKind.Unspecified, evt.Date.Kind);
+    }
+
+    [Fact]
+    public async Task ImportAsync_WithUtcSuffixInDate_RejectsWithPortugueseErrorInsteadOfGuessing()
+    {
+        // Event.Date is a naive Europe/Lisbon wall-clock value (no time zone stored) — see
+        // docs/plans/2026-07-15-eventos-fightcard-design.md. A "Z" suffix is ambiguous
+        // (is 20:00Z meant literally, or does it need converting to Lisbon time?) and
+        // reinterpreting it silently is what caused the DST bug; it must be rejected instead.
+        Write("events.csv",
+            "name,slug,date,venue,city,status\n" +
+            "Task4 Utc Night,task4-utc-night,2026-05-30T20:00:00Z,Pavilhão,Almada,Draft\n");
+
+        var report = await RunAsync();
+
+        Assert.True(report.HasErrors);
+        Assert.Contains(report.Errors, e =>
+            e.Contains("events.csv") && e.Contains("linha 2") && e.Contains("coluna 'date'"));
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SfcDbContext>();
+        Assert.False(await db.Events.AnyAsync(e => e.Slug == "task4-utc-night"));
+    }
+
+    [Fact]
+    public void EnsureTransitionSucceeded_WithSuccess_DoesNotThrow()
+    {
+        var row = new CsvRow("events.csv", 2, new Dictionary<string, string>());
+
+        var exception = Record.Exception(() =>
+            SeedImporter.EnsureTransitionSucceeded(row, "publicar", EventTransitionResult.Success));
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void EnsureTransitionSucceeded_WithNonSuccessResult_ThrowsPortugueseErrorNamingOperationAndValue()
+    {
+        // PublishAsync/CompleteAsync return EventTransitionResult, but SeedImporter used to
+        // discard it (unlike AddFightAsync/SaveResultAsync in the same file, which already
+        // check theirs). A freshly created event is always Draft, so Publish always succeeds
+        // and Complete always follows a successful Publish in the same row — the failure
+        // branch is unreachable through the public ImportAsync surface today, so this pure
+        // unit test on the extracted guard is the only way to prove it actually fires.
+        var row = new CsvRow("events.csv", 2, new Dictionary<string, string>());
+
+        var ex = Assert.Throws<ImportException>(() =>
+            SeedImporter.EnsureTransitionSucceeded(row, "publicar", EventTransitionResult.InvalidTransition));
+
+        Assert.Contains("events.csv", ex.Message);
+        Assert.Contains("linha 2", ex.Message);
+        Assert.Contains("publicar", ex.Message);
+        Assert.Contains("InvalidTransition", ex.Message);
+    }
+
+    [Fact]
+    public async Task ImportAsync_WithFightRowForUnmatchedEventSlug_ReportsOrphanRowError()
+    {
+        // event_slug in fights.csv/results.csv is matched by filtering per event inside
+        // AddFightsAsync/SaveResultsAsync — a typo'd slug that matches nothing in events.csv
+        // is never visited by any loop, so it silently vanished with no error and no count.
+        Write("events.csv",
+            "name,slug,date,venue,city,status\n" +
+            "Task4 Real Card,task4-real-card,2026-05-30T20:00,Pavilhão,Almada,Draft\n");
+        Write("fights.csv",
+            "event_slug,order,discipline,rounds,round_duration_minutes,weight_class," +
+            "catchweight_kg,is_title_fight,is_amateur,red_athlete_slug,blue_athlete_slug\n" +
+            "task4-nao-existe,1,Boxing,3,3,-67kg,,0,0,a,b\n");
+
+        var report = await RunAsync();
+
+        Assert.True(report.HasErrors);
+        Assert.Contains(report.Errors, e =>
+            e.Contains("fights.csv") && e.Contains("linha 2") && e.Contains("task4-nao-existe"));
+    }
+
+    [Fact]
+    public async Task ImportAsync_WithResultRowForUnmatchedEventSlug_ReportsOrphanRowError()
+    {
+        Write("events.csv",
+            "name,slug,date,venue,city,status\n" +
+            "Task4 Real Card 2,task4-real-card-2,2026-05-30T20:00,Pavilhão,Almada,Draft\n");
+        Write("results.csv",
+            "event_slug,fight_order,winner_slug,method,round,time\n" +
+            "task4-nao-existe-tambem,1,a,Ko,2,1:45\n");
+
+        var report = await RunAsync();
+
+        Assert.True(report.HasErrors);
+        Assert.Contains(report.Errors, e =>
+            e.Contains("results.csv") && e.Contains("linha 2") && e.Contains("task4-nao-existe-tambem"));
+    }
+
+    [Fact]
+    public async Task ImportAsync_WithCancelledStatus_ReportsErrorInsteadOfImportingAsDraft()
+    {
+        // status=Cancelled used to be imported as a plain Draft event with no transition and
+        // no error — a silent mismatch between what the file asked for and what got stored.
+        Write("events.csv",
+            "name,slug,date,venue,city,status\n" +
+            "Task4 Cancelled Night,task4-cancelled-night,2026-05-30T20:00,Pavilhão,Almada,Cancelled\n");
+
+        var report = await RunAsync();
+
+        Assert.True(report.HasErrors);
+        Assert.Contains(report.Errors, e =>
+            e.Contains("events.csv") && e.Contains("linha 2") && e.Contains("Cancelled"));
     }
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Sfc.Domain.Athletes;
 using Sfc.Domain.Events;
@@ -299,16 +300,7 @@ public class SeedImporter(ClubService clubs, AthleteService athletes, EventServi
                     continue;
                 }
 
-                // Event.Date is a naive local DateTime (column "timestamp without time zone" —
-                // see docs/plans/2026-07-15-eventos-fightcard-design.md): AdjustToUniversal
-                // normalises any offset in the CSV value first, so parsing is deterministic
-                // regardless of the machine's local time zone, then SpecifyKind strips the
-                // resulting Utc marker Npgsql would otherwise reject for that column type,
-                // taking the literal date/time digits as the naive local value.
-                var date = DateTime.SpecifyKind(
-                    DateTime.Parse(row.Required("date"), CultureInfo.InvariantCulture,
-                        DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal),
-                    DateTimeKind.Unspecified);
+                var date = ParseEventDate(row);
 
                 var evt = await events.CreateAsync(new EventInput(row.Required("name"),
                     row.Text("description"), date, row.Text("venue"), row.Text("city"),
@@ -323,14 +315,30 @@ public class SeedImporter(ClubService clubs, AthleteService athletes, EventServi
                 // lifecycle) — a Draft-status row in events.csv therefore never touches
                 // results.csv at all, even if a mismatched row happens to reference it.
                 var status = row.Enum<EventStatus>("status") ?? EventStatus.Draft;
+
+                // The importer has no way to honour "Cancelled" (there is no CSV-driven
+                // equivalent of the manual cancellation workflow), so pretending it is a
+                // Draft event — which the enum's default fallback above would otherwise do
+                // silently — would store something the file never asked for.
+                if (status is EventStatus.Cancelled)
+                    throw row.Fail("status", "estado 'Cancelled' não é suportado pela " +
+                        "importação; crie o evento sem esta linha e cancele-o manualmente depois");
+
                 if (status is EventStatus.Published or EventStatus.Completed)
                 {
-                    await events.PublishAsync(evt.Id, ct);
+                    var publishResult = await events.PublishAsync(evt.Id, ct);
+                    EnsureTransitionSucceeded(row, "publicar", publishResult);
+
+                    // Only reached once the publish above is confirmed Success — results must
+                    // never be saved on the back of a publish that silently failed.
                     await SaveResultsAsync(evt.Id, slug, resultRows, athleteIds, report, ct);
                 }
 
                 if (status is EventStatus.Completed)
-                    await events.CompleteAsync(evt.Id, ct);
+                {
+                    var completeResult = await events.CompleteAsync(evt.Id, ct);
+                    EnsureTransitionSucceeded(row, "concluir", completeResult);
+                }
             }
             catch (ImportException ex)
             {
@@ -355,6 +363,9 @@ public class SeedImporter(ClubService clubs, AthleteService athletes, EventServi
                 db.ChangeTracker.Clear();
             }
         }
+
+        ReportOrphanEventRows(fightRows, existingSlugs, report);
+        ReportOrphanEventRows(resultRows, existingSlugs, report);
     }
 
     /// <summary>Adds the event's fights in card order (the CSV's <c>order</c> column);
@@ -482,11 +493,80 @@ public class SeedImporter(ClubService clubs, AthleteService athletes, EventServi
             report.Error(ex.Message);
             return [];
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             report.Error($"{file}: não foi possível ler o ficheiro ({ex.GetType().Name}): {ex.Message}");
             return [];
         }
+    }
+
+    /// <summary>fights.csv/results.csv rows are matched to an event only by filtering per
+    /// event inside AddFightsAsync/SaveResultsAsync — a row whose event_slug matches nothing
+    /// in events.csv is therefore never visited by any loop and would otherwise vanish
+    /// without a trace (no error, no count). Called once after every events.csv row has been
+    /// processed, against the final set of known slugs: pre-existing DB slugs plus every
+    /// slug read from events.csv, whether or not that row's own import succeeded — "matches
+    /// a row in events.csv" is the contract, not "matches a successfully created event".
+    /// </summary>
+    private static void ReportOrphanEventRows(List<CsvRow> rows, HashSet<string> knownSlugs,
+        ImportReport report)
+    {
+        foreach (var row in rows)
+        {
+            var slug = row.Text("event_slug");
+            if (slug is null || !knownSlugs.Contains(slug))
+                report.Error(row.Fail("event_slug",
+                    $"não corresponde a nenhum evento em events.csv (slug '{slug}')").Message);
+        }
+    }
+
+    // A "Z" suffix or numeric UTC offset in the CSV "date" column is inherently ambiguous
+    // here — is "20:00Z" meant literally, or does it need converting to Lisbon time? —
+    // and silently guessing (the old AdjustToUniversal/AssumeUniversal + SpecifyKind
+    // approach) shifted the stored value by an hour during DST. Rejecting it outright
+    // instead of reinterpreting it is the fix.
+    private static readonly Regex EventDateHasTimeZone =
+        new(@"(?:Z|[+-]\d{2}:\d{2})$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>Event.Date is a naive Europe/Lisbon wall-clock DateTime (column "timestamp
+    /// without time zone" — see docs/plans/2026-07-15-eventos-fightcard-design.md), so the
+    /// CSV "date" column carries Lisbon local time with no time zone attached. The digits are
+    /// taken exactly as written; no time-zone conversion happens anywhere in this method.
+    /// </summary>
+    private static DateTime ParseEventDate(CsvRow row)
+    {
+        var text = row.Required("date");
+        if (EventDateHasTimeZone.IsMatch(text))
+            throw row.Fail("date", $"'{text}' inclui fuso horário (Z ou offset); indique a " +
+                "hora local de Portugal sem fuso, no formato yyyy-MM-ddTHH:mm");
+
+        string[] formats = ["yyyy-MM-ddTHH:mm", "yyyy-MM-dd HH:mm"];
+        return DateTime.TryParseExact(text, formats, CultureInfo.InvariantCulture,
+            DateTimeStyles.None, out var value)
+            ? DateTime.SpecifyKind(value, DateTimeKind.Unspecified)
+            : throw row.Fail("date", $"'{text}' não está no formato yyyy-MM-ddTHH:mm " +
+                "(hora local de Portugal, sem fuso horário)");
+    }
+
+    /// <summary>Shared by the two Event lifecycle transitions the importer drives (publish,
+    /// complete): both return <see cref="EventTransitionResult"/>, and — like
+    /// AddFightAsync/SaveResultAsync elsewhere in this file, which already check theirs — a
+    /// non-Success value must become a recorded pt-PT error naming the operation and the enum
+    /// value, never a silent no-op. Internal (not private): a freshly created event is always
+    /// Draft, so Publish always succeeds, and Complete always follows a successful Publish in
+    /// the same row, which makes the failure branch unreachable through the public ImportAsync
+    /// surface today. Exposing this as a directly-testable unit is the only way to prove the
+    /// guard actually fires; see SeedImporterTests.EnsureTransitionSucceeded_*.
+    /// </summary>
+    internal static void EnsureTransitionSucceeded(CsvRow row, string action,
+        EventTransitionResult result)
+    {
+        if (result is not EventTransitionResult.Success)
+            throw row.Fail($"não foi possível {action} o evento ({result})");
     }
 
     private static string NaturalKey(string firstName, string lastName, DateOnly dateOfBirth)
