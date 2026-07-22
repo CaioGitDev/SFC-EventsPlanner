@@ -22,6 +22,28 @@
 - Commits pequenos, mensagem **em inglês no imperativo**.
 - `OrganizationId` resolve-se sozinho: `SfcDbContext.CurrentOrganizationId` tem default `SeedData.SfcOrganizationId`. O importador não passa organização.
 
+## Emendas durante a execução
+
+Decisões tomadas em revisão, depois de o plano ser escrito. **Onde estas contradizem os
+blocos de código das tasks, estas prevalecem** — os blocos são o ponto de partida, não a
+autoridade.
+
+1. **Linhas em branco são ignoradas** (`IgnoreBlankLines = true`). O teste de campo
+   obrigatório usa um fixture de duas colunas: num ficheiro de uma só coluna, "linha em
+   branco" e "campo obrigatório vazio" são indistinguíveis. Decisão do Caio, 2026-07-21.
+2. **`CsvRow.Text` é permissivo com colunas ausentes** (devolve `null` em vez de lançar),
+   porque os fixtures declaram legitimamente só um subconjunto de colunas. A deteção de
+   cabeçalhos mal escritos passa para o ficheiro: `CsvTable.Read(path, knownColumns)`
+   rejeita qualquer coluna do cabeçalho que não esteja na lista conhecida. Sem isto, um
+   `email_contacto` em vez de `contact_email` ficava silenciosamente vazio em todas as
+   linhas.
+3. **Mensagens de exceção do domínio são enquadradas em pt-PT** e incluem o nome do tipo da
+   exceção, para que um bug de programação (`NullReferenceException`) não se disfarce de
+   erro de dados.
+4. **O catch por linha é `Exception`**, com `OperationCanceledException` a ser relançada.
+   O `ImportReport` promete que uma linha má não mata a importação — o catch estreito
+   contradizia essa promessa.
+
 ## Factos do código que condicionam este plano
 
 Verificados antes de escrever o plano — não voltar a assumir o contrário:
