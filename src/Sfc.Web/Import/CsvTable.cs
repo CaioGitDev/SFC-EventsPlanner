@@ -13,12 +13,13 @@ public class CsvRow(string file, int line, IReadOnlyDictionary<string, string> f
     public string File { get; } = file;
     public int Line { get; } = line;
 
+    // A column absent from the header is treated the same as a blank value: seed files are
+    // hand-trimmed to the columns that matter for that batch (e.g. a clubs.csv with just
+    // name/city), so optional columns are genuinely optional at the file level too. Required()
+    // still gives a clear error for whichever case applies.
     public string? Text(string column)
     {
-        if (!fields.TryGetValue(column, out var value))
-            throw Fail(column, "coluna em falta no ficheiro");
-
-        var trimmed = value.Trim();
+        var trimmed = fields.GetValueOrDefault(column, "").Trim();
         return trimmed.Length == 0 ? null : trimmed;
     }
 
