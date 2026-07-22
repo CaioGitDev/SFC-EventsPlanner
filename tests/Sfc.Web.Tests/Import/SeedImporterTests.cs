@@ -106,5 +106,74 @@ public class SeedImporterTests(SfcWebApplicationFactory factory)
         Assert.Equal(0, report.CountCreated("clubs.csv"));
     }
 
+    [Fact]
+    public async Task ImportAsync_WithMistypedHeaderColumn_ReportsErrorAndCreatesNothing()
+    {
+        // "email_contacto" instead of "contact_email": CsvTable.Read raises ImportException
+        // for the unknown column, and SeedImporter's file-level catch must record it (already
+        // covered by the ImportException catch) rather than let it escape. This proves the
+        // wiring, not just CsvTable.Read in isolation.
+        Write("clubs.csv",
+            "name,city,email_contacto\nTask2 Typo Gym,Lisboa,geral@typo.pt\n");
+
+        var report = await RunAsync();
+
+        Assert.True(report.HasErrors);
+        var error = Assert.Single(report.Errors);
+        Assert.Contains("clubs.csv", error);
+        Assert.Contains("email_contacto", error);
+        Assert.Equal(0, report.CountCreated("clubs.csv"));
+
+        using var scope = factory.Services.CreateScope();
+        var clubs = scope.ServiceProvider.GetRequiredService<ClubService>();
+        Assert.Empty(await clubs.SearchAsync("Task2 Typo Gym"));
+    }
+
+    [Fact]
+    public async Task ImportAsync_WithMalformedQuotingInHeader_ReportsErrorAndContinues()
+    {
+        // A stray quote inside the header line is invalid per RFC4180 and is not the
+        // ImportException CsvTable.Read raises for an unknown column — it is CsvHelper's own
+        // BadDataException, thrown by csv.ReadHeader() before CsvTable.Read gets a chance to
+        // wrap it. It escapes CsvTable.Read entirely, so the file-level catch in SeedImporter
+        // must hold the same "the run never aborts" guarantee as the row-level one.
+        Write("clubs.csv", "nam\"e,city\nScorpion,Lisboa\n");
+
+        var report = await RunAsync();
+
+        Assert.True(report.HasErrors);
+        var error = Assert.Single(report.Errors);
+        Assert.Contains("clubs.csv", error);
+        Assert.Contains("BadDataException", error);
+        Assert.Equal(0, report.CountCreated("clubs.csv"));
+    }
+
+    [Fact]
+    public async Task ImportAsync_WithRowExceedingColumnLength_ReportsNonArgumentExceptionAndContinues()
+    {
+        // Club.Name has no domain-level length rule (SetDetails only requires non-blank), so
+        // a name over the 200-char column limit (SfcDbContext: entity.Property(c => c.Name)
+        // .HasMaxLength(200)) passes domain validation and is rejected only by Postgres on
+        // SaveChangesAsync, as a DbUpdateException. The pre-fix row-level catch (ArgumentException
+        // only) would let this escape and abort the whole import; this proves the widened
+        // `catch (Exception)` is reachable by something other than ArgumentException, and that
+        // a second, valid row in the same file still gets imported afterwards.
+        var longName = new string('A', 201);
+        Write("clubs.csv", $"name,city\n{longName},Lisboa\nTask2 Second Gym,Porto\n");
+
+        var report = await RunAsync();
+
+        Assert.True(report.HasErrors);
+        var error = Assert.Single(report.Errors);
+        Assert.Contains("clubs.csv", error);
+        Assert.Contains("linha 2", error);
+        Assert.Contains("DbUpdateException", error);
+        Assert.Equal(1, report.CountCreated("clubs.csv"));
+
+        using var scope = factory.Services.CreateScope();
+        var clubs = scope.ServiceProvider.GetRequiredService<ClubService>();
+        Assert.Single(await clubs.SearchAsync("Task2 Second Gym"));
+    }
+
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 }

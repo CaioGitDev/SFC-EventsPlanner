@@ -52,6 +52,21 @@ public class SeedImporter(ClubService clubs, AthleteService athletes, EventServi
             report.Error(ex.Message);
             return;
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // CsvTable.Read is driven by CsvHelper, which throws its own exception types
+            // (BadDataException and other CsvHelperException subclasses) on malformed
+            // quoting — a realistic occurrence in a hand-edited spreadsheet. Same contract
+            // as a bad header: the file cannot be trusted, but the run must not abort, so
+            // it is recorded like any other import error, exception type kept so a real
+            // programming bug is not disguised as a spreadsheet problem.
+            report.Error($"{file}: não foi possível ler o ficheiro ({ex.GetType().Name}): {ex.Message}");
+            return;
+        }
 
         var existing = (await db.Clubs.AsNoTracking().Select(c => c.Name).ToListAsync(ct))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -90,6 +105,16 @@ public class SeedImporter(ClubService clubs, AthleteService athletes, EventServi
                 // a real programming bug is not disguised as a spreadsheet problem.
                 report.Error(row.Fail(
                     $"rejeitado pela validação do domínio ({ex.GetType().Name}): {ex.Message}").Message);
+
+                // A failure that reached SaveChangesAsync (e.g. a column-length violation)
+                // leaves the rejected entity tracked as Added: the next row's SaveChangesAsync
+                // would try to re-insert it alongside the new one and fail again, wrongly
+                // rejecting an otherwise-valid row. Clearing the tracker drops that dangling
+                // entity; already-committed rows stay in the database (this only forgets local
+                // tracking, it does not touch the transaction), so it is safe to call
+                // unconditionally, including for the ArgumentException case that never reached
+                // db.Clubs.Add in the first place.
+                db.ChangeTracker.Clear();
             }
         }
     }
