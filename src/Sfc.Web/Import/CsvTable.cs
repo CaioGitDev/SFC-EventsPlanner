@@ -98,7 +98,10 @@ public static class CsvTable
         {
             TrimOptions = TrimOptions.Trim,
             MissingFieldFound = null,
-            IgnoreBlankLines = false,
+            // Blank lines are skipped (CsvHelper default). Real input is a human-maintained
+            // Excel export, so stray blank lines are expected; without this a blank line
+            // becomes a phantom all-empty row instead of being ignored.
+            IgnoreBlankLines = true,
         };
 
         using var reader = new StreamReader(path);
