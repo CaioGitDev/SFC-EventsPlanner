@@ -84,5 +84,27 @@ public class SeedImporterTests(SfcWebApplicationFactory factory)
         Assert.Equal(1, report.CountCreated("clubs.csv"));
     }
 
+    [Fact]
+    public async Task ImportAsync_WithMalformedCoach_ReportsDomainErrorFramedInPortuguese()
+    {
+        // ";alguem@x.pt" splits into an empty coach name and a contact, which the Coach
+        // constructor rejects with an English ArgumentException. The report must frame
+        // that in pt-PT for the non-technical human reading it, with no doubled period.
+        Write("clubs.csv",
+            "name,city,coaches\nTask2 Broken Gym,Lisboa,;alguem@x.pt|Kru Ana\n");
+
+        var report = await RunAsync();
+
+        Assert.True(report.HasErrors);
+        var error = Assert.Single(report.Errors);
+        Assert.Contains("clubs.csv", error);
+        Assert.Contains("linha 2", error);
+        Assert.Contains("rejeitado pela validação do domínio", error);
+        Assert.Contains("ArgumentException", error);
+        Assert.Contains("Coach name is required", error);
+        Assert.DoesNotContain("..", error);
+        Assert.Equal(0, report.CountCreated("clubs.csv"));
+    }
+
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 }

@@ -39,10 +39,24 @@ public class SeedImporter(ClubService clubs, AthleteService athletes, EventServi
         if (!File.Exists(path))
             return;
 
+        List<CsvRow> rows;
+        try
+        {
+            rows = CsvTable.Read(path, "name", "city", "country", "contact_email",
+                "contact_phone", "coaches");
+        }
+        catch (ImportException ex)
+        {
+            // A bad header is a file-level problem: no row can be trusted, but it must not
+            // abort the whole run — it is recorded like any other import error.
+            report.Error(ex.Message);
+            return;
+        }
+
         var existing = (await db.Clubs.AsNoTracking().Select(c => c.Name).ToListAsync(ct))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var row in CsvTable.Read(path))
+        foreach (var row in rows)
         {
             try
             {
@@ -61,11 +75,21 @@ public class SeedImporter(ClubService clubs, AthleteService athletes, EventServi
             }
             catch (ImportException ex)
             {
+                // Already pt-PT and already carries file/line/column — pass through as-is.
                 report.Error(ex.Message);
             }
-            catch (ArgumentException ex)
+            catch (OperationCanceledException)
             {
-                report.Error(row.Fail(ex.Message).Message);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Import never aborts on a bad row (see ImportReport). Any other exception —
+                // a domain ArgumentException, a DbUpdateException, a genuine bug — is framed
+                // in pt-PT for the human reading the report, with the exception type kept so
+                // a real programming bug is not disguised as a spreadsheet problem.
+                report.Error(row.Fail(
+                    $"rejeitado pela validação do domínio ({ex.GetType().Name}): {ex.Message}").Message);
             }
         }
     }

@@ -92,5 +92,56 @@ public class CsvTableTests : IDisposable
         Assert.Contains("Sumo", ex.Message);
     }
 
+    [Fact]
+    public void Read_WithUnknownHeaderColumn_ThrowsNamingColumnAndFile()
+    {
+        // A typo'd or renamed header (e.g. email_contacto instead of contact_email) used to
+        // silently produce a blank field on every row. Validating against the known column
+        // list at file level restores that signal without making Text() throw again.
+        var path = WriteCsv("clubs.csv", "name,email_contacto\nScorpion Gym,geral@scorpion.pt\n");
+
+        var ex = Assert.Throws<ImportException>(
+            () => CsvTable.Read(path, "name", "city", "contact_email"));
+
+        Assert.Contains("clubs.csv", ex.Message);
+        Assert.Contains("email_contacto", ex.Message);
+    }
+
+    [Fact]
+    public void Read_WithHeaderDeclaringOnlySubsetOfKnownColumns_IsAccepted()
+    {
+        // Fixtures legitimately declare only the columns that matter for that batch — a
+        // header missing some known columns is not an error, only an unrecognised one is.
+        var path = WriteCsv("clubs.csv", "name,city\nScorpion Gym,Lisboa\n");
+
+        var rows = CsvTable.Read(path, "name", "city", "country", "contact_email");
+
+        Assert.Single(rows);
+        Assert.Equal("Scorpion Gym", rows[0].Required("name"));
+    }
+
+    [Fact]
+    public void Text_WhenColumnAbsentFromHeader_ReturnsNull()
+    {
+        // Direct coverage for the lenient Text() behaviour — previously only exercised
+        // indirectly through SeedImporterTests.
+        var path = WriteCsv("clubs.csv", "name\nScorpion Gym\n");
+
+        var rows = CsvTable.Read(path);
+
+        Assert.Null(rows[0].Text("contact_email"));
+    }
+
+    [Fact]
+    public void Fail_WithProblemEndingInPeriod_DoesNotDoubleThePeriod()
+    {
+        var path = WriteCsv("a.csv", "name\nJoao\n");
+        var row = CsvTable.Read(path)[0];
+
+        var ex = row.Fail("Coach name is required.");
+
+        Assert.Equal("a.csv, linha 2: Coach name is required.", ex.Message);
+    }
+
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 }

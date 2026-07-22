@@ -83,16 +83,27 @@ public class CsvRow(string file, int line, IReadOnlyDictionary<string, string> f
             : throw Fail(column, $"'{text}' não é um valor válido de {typeof(T).Name}");
     }
 
+    // Trim any trailing period from the caller's problem text first: Fail() always appends
+    // its own, and domain exception messages (e.g. "Coach name is required.") already end
+    // in one, which used to produce a doubled "..".
     public ImportException Fail(string column, string problem)
-        => new($"{File}, linha {Line}, coluna '{column}': {problem}.");
+        => new($"{File}, linha {Line}, coluna '{column}': {problem.TrimEnd('.')}.");
 
     public ImportException Fail(string problem)
-        => new($"{File}, linha {Line}: {problem}.");
+        => new($"{File}, linha {Line}: {problem.TrimEnd('.')}.");
 }
 
 public static class CsvTable
 {
-    public static List<CsvRow> Read(string path)
+    /// <summary>
+    /// Reads a CSV file. When <paramref name="knownColumns"/> is non-empty, the header is
+    /// validated against it once: any header column not in the list is a mistyped or
+    /// renamed column and fails the whole file up front, rather than silently reading as
+    /// blank on every row (CsvRow.Text is lenient about absent columns for exactly that
+    /// reason — this is the file-level signal that replaces it). A header that only
+    /// declares a subset of known columns is fine; fixtures legitimately do that.
+    /// </summary>
+    public static List<CsvRow> Read(string path, params string[] knownColumns)
     {
         var file = Path.GetFileName(path);
         var config = new CsvConfiguration(CultureInfo.InvariantCulture)
@@ -112,6 +123,14 @@ public static class CsvTable
         csv.ReadHeader();
         var header = csv.HeaderRecord
             ?? throw new ImportException($"{file}: ficheiro sem linha de cabeçalho.");
+
+        if (knownColumns.Length > 0)
+        {
+            var known = new HashSet<string>(knownColumns, StringComparer.OrdinalIgnoreCase);
+            var unknown = header.FirstOrDefault(column => !known.Contains(column));
+            if (unknown is not null)
+                throw new ImportException($"{file}: coluna desconhecida '{unknown}'.");
+        }
 
         var rows = new List<CsvRow>();
         while (csv.Read())
