@@ -43,6 +43,16 @@ tempos de resposta lidos dos logs do servidor.
 |---|---|---|
 | D1 | **Superfights cross-disciplina uniformes:** todos os 20 combates do dataset têm exatamente um canto cuja disciplina pessoal difere da disciplina do combate. Parece deliberado mas 20/20 é suspeito. | **Confirmar com o Caio** se é intencional. Não é mislead perigoso — o portal mostra a disciplina do combate. |
 
+## Achados dos gates de âmbito/domínio (pré-PR)
+
+| # | Item | Estado |
+|---|---|---|
+| G1 | **Importador reindexa a ordem dos combates em silêncio.** `SeedImporter.AddFightsAsync` ordena por `order` do CSV mas `Event.AddFight` reatribui a posição sequencialmente (`_fights.Count + 1`); um buraco ou duplicado na coluna `order` do Excel real seria reindexado 1..N sem erro, ao contrário de outros problemas de linha que são reportados. Invisível no dataset atual (ordens contíguas). | Limitação conhecida do importador — validar contiguidade por evento quando o Excel real chegar. Correção. |
+| G2 | Revisor-dominio assinalou `fights.csv:4` (Carla vs Sofia) como amador em combate pro — **falso positivo** por desalinhamento de colunas (`is_amateur=1`, o `0` é o `is_title_fight`). Verificado programaticamente: os 20 combates são coerentes. | Sem ação. |
+| G3 | Dataset não tem nenhum atleta sem clube, embora `ClubId` seja opcional e "free agents" sejam reais. | Melhoria de cobertura do mock, não bloqueia. |
+
+Vereditos dos gates: **guardiao-ambito APROVADO** (nada fora de âmbito); **revisor-dominio** confirmou o motor de agregação de records correto e o RGPD (P1) como bloqueador real e bem caracterizado.
+
 ## A preencher no ensaio do Caio
 
 - **Cronometragem real** por combate (meta < 30s) — o número humano, não a medição estrutural.
