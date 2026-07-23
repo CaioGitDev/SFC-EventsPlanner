@@ -31,3 +31,9 @@ Thumbs.db
 # Dados locais
 docker-volumes/
 *.db
+
+# Dumps de base de dados — nunca versionados (docs/05-git-workflow.md).
+# Contêm dados pessoais (nomes, datas de nascimento). O *.dump é defesa em
+# profundidade para o caso de um dump ser escrito fora de backups/.
+backups/
+*.dump
