@@ -31,3 +31,6 @@ Thumbs.db
 # Dados locais
 docker-volumes/
 *.db
+
+# Dumps de base de dados — nunca versionados (docs/05-git-workflow.md)
+backups/
